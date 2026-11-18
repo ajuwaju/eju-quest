@@ -46,9 +46,9 @@
   /* ---------- Navigation ---------- */
   const NAV = [
     ["#/", "hub", "Hub"], ["#/map", "map", "Districts"], ["#/shards", "shard", "Shards"], ["#/intercept", "wave", "Intercepts"],
-    ["#/boss", "target", "Corp exam"], ["#/crew", "crew", "Crew"], ["#/shop", "shop", "Chrome clinic"], ["#/intel", "intel", "Intel"], ["#/me", "user", "Runner"]
+    ["#/boss", "target", "Corp exam"], ["#/writing", "chip", "Writing"], ["#/crew", "crew", "Crew"], ["#/shop", "shop", "Chrome clinic"], ["#/intel", "intel", "Intel"], ["#/resources", "ext", "Resources"], ["#/me", "user", "Runner"]
   ];
-  const MOBILE = [["#/", "hub", "Hub"], ["#/map", "map", "Districts"], ["#/shards", "shard", "Shards"], ["#/intel", "intel", "Intel"], ["#/me", "user", "Runner"]];
+  const MOBILE = [["#/", "hub", "Hub"], ["#/map", "map", "Districts"], ["#/shards", "shard", "Shards"], ["#/intel", "intel", "Intel"], ["#/resources", "ext", "Resources"]];
   function renderNav() {
     const cur = "#/" + (location.hash.replace(/^#\/?/, "").split("/")[0] || "");
     const due = totalDue();
@@ -295,15 +295,17 @@
           ${run.optic ? `<button class="btn small ghost" id="optic">${icon("scan")}Scanner optic</button>` : ""}</div>
         <p class="question ${hasJP(q.q) ? "jpq" : ""}" ${hasJP(q.q) ? 'lang="ja"' : ""}>${esc(q.q)}</p>
         <div class="choices">${order.map((ci, k) => `<button class="choice" data-ci="${ci}" ${hasJP(q.c[ci]) ? 'lang="ja"' : ""}><span class="k">${k + 1}</span><span>${esc(q.c[ci])}</span></button>`).join("")}</div>
+        <button class="btn ghost small idk" id="idk" type="button">${icon("intel")}I don't know, show me</button>
         <div id="after"></div>
       </section>
-      <p class="muted small" style="margin-top:var(--space-sm)">Keys 1 to 4 answer. Enter moves on.</p>
+      <p class="muted small" style="margin-top:var(--space-sm)">Keys 1 to 4 answer, 0 for "I don't know". Enter moves on. Not knowing costs no integrity.</p>
     </div>`;
   }
   function bindMission() {
     if (run.i === 0 && !run.answered) animateTalk($("#commBox"));
     $$(".choice").forEach(b => b.addEventListener("pointerdown", () => sfx("tap")));
     $$(".choice").forEach(b => b.addEventListener("click", (e) => choose(+b.dataset.ci, b, e)));
+    const ib = $("#idk"); ib && ib.addEventListener("click", (e) => choose(-1, ib, e));
     const op = $("#optic"); op && op.addEventListener("click", () => {
       const q = run.list[run.i]; const wrong = shuffle(q.c.map((_, i) => i).filter(i => i !== q.a)).slice(0, 2);
       wrong.forEach(i => { const b = $(`.choice[data-ci="${i}"]`); b.classList.add("struck"); b.disabled = true; });
@@ -364,13 +366,25 @@
       requestAnimationFrame(step);
     });
   }
+  /* Expandable step-by-step explanation: the question's own steps, then the general method for its topic. */
+  function explainTab(q, open) {
+    const steps = q.st || [], how = EJU.methods[q.t] || [];
+    if (!steps.length && !how.length) return "";
+    return `<details class="steps" ${open ? "open" : ""}><summary>${icon("intel")}Step-by-step explanation</summary>
+      ${steps.length ? `<h4>Solving this one</h4><ol>${steps.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+      ${how.length ? `<h4>How to tackle ${esc(q.t.toLowerCase())} questions</h4><ol>${how.map(x => `<li>${esc(x)}</li>`).join("")}</ol>` : ""}
+      <p class="muted small">This question goes to your Glitch log if you missed it, so it comes back until you get it right.</p></details>`;
+  }
   function choose(ci, btn, e) {
     if (run.answered) return; run.answered = true;
-    const q = run.list[run.i], ok = ci === q.a;
+    const q = run.list[run.i], ok = ci === q.a, idk = ci < 0;
     Game.answer(q.id, ok);
     $$(".choice").forEach(b => { b.disabled = true; if (+b.dataset.ci === q.a) b.classList.add("right"); });
+    const ib = $("#idk"); if (ib) ib.disabled = true;
     const r = btn.getBoundingClientRect();
-    if (ok) {
+    if (idk) {
+      comm("idk"); sfx("flip");
+    } else if (ok) {
       const combo = S().combo; const bonus = Math.min(combo - 1, 5) * 2;
       const xp = 10 + bonus, cr = 8 + Math.min(combo, 6);
       run.right++; run.xp += xp; run.creds += cr;
@@ -386,7 +400,8 @@
       const f = document.createElement("div"); f.className = "glitch-flash"; document.body.appendChild(f); setTimeout(() => f.remove(), 300);
     }
     const last = run.i >= run.list.length - 1 || run.hp <= 0;
-    $("#after").innerHTML = `<div class="explain"><b>${ok ? "Clean hit." : "Glitch. The answer is: " + esc(q.c[q.a])}</b><br>${esc(q.e)}</div>
+    $("#after").innerHTML = `<div class="explain"><b>${ok ? "Clean hit." : idk ? "No problem. The answer is: " + esc(q.c[q.a]) : "Glitch. The answer is: " + esc(q.c[q.a])}</b><br>${esc(q.e)}</div>
+      ${explainTab(q, !ok)}
       <div class="row" style="margin-top:var(--space-md)"><button class="btn primary" id="next">${last ? "Finish run" : "Next"}</button></div>`;
     $("#next").focus({ preventScroll: true });
     $("#next").addEventListener("click", () => { sfx("nav"); last ? endMission() : (run.i++, run.answered = false, view.innerHTML = missionHTML(), bindMission()); });
@@ -444,12 +459,15 @@
       <div><div class="row between small"><span>Corp exam</span><span class="data">${boss.i + 1}/${boss.list.length}</span></div><div class="bar thin pink"><i style="--p:${(boss.i / boss.list.length).toFixed(3)}"></i></div></div><span></span></div>
       <section class="panel stack"><span class="topic">${esc(subj(q.s).name)}, ${esc(q.t)}</span>
         <p class="question ${hasJP(q.q) ? "jpq" : ""}">${esc(q.q)}</p>
-        <div class="choices">${q.c.map((c, k) => `<button class="choice" data-ci="${k}"><span class="k">${k + 1}</span><span>${esc(c)}</span></button>`).join("")}</div></section></div>`;
-    $$(".choice").forEach(b => b.addEventListener("click", () => {
-      const ci = +b.dataset.ci; const ok = ci === q.a; sfx("tap");
+        <div class="choices">${(q._order || (q._order = shuffle(q.c.map((_, i) => i)))).map((ci, k) => `<button class="choice" data-ci="${ci}"><span class="k">${k + 1}</span><span>${esc(q.c[ci])}</span></button>`).join("")}</div>
+        <button class="btn ghost small idk" id="idk" type="button">Skip, I don't know</button></section></div>`;
+    const pickB = (ci) => {
+      const ok = ci === q.a; sfx("tap");
       Game.answer(q.id, ok); if (ok) boss.right++; boss.answers.push({ q, ci });
       if (boss.i < boss.list.length - 1) { boss.i++; renderBoss(); } else { clearInterval(bossTimer); endBoss(); }
-    }));
+    };
+    $$(".choice").forEach(b => b.addEventListener("click", () => pickB(+b.dataset.ci)));
+    $("#idk").addEventListener("click", () => pickB(-1));
   }
   function endBoss() {
     const total = boss.list.length, pct = boss.right / total;
@@ -459,7 +477,7 @@
     view.innerHTML = `<section class="panel result">${pct >= 0.7 ? `<div class="stamp" lang="ja">合格</div>` : ""}<h2>${pct >= 0.7 ? "Corp breached" : "Security held. This time."}</h2>
       <div class="big data">${Math.round(pct * 100)}%</div><p class="muted">${boss.right} of ${total} right with ${clock(boss.left)} left. +${xp} XP.</p>
       <div class="row" style="justify-content:center"><a class="btn primary" href="#/mission/mistakes">Fix the glitches</a><a class="btn ghost" href="#/">Hub</a></div></section>
-      <section class="panel stack" style="margin-top:var(--space-lg)"><h2>Review</h2><ul class="list">${boss.answers.map(({ q, ci }) => `<li><span class="${hasJP(q.q) ? "jp" : ""}">${esc(q.q)}</span><span class="small ${ci === q.a ? "" : "muted"}">${ci === q.a ? "Right" : "You chose " + esc(q.c[ci]) + ". Answer: " + esc(q.c[q.a])}</span></li>`).join("")}</ul></section>`;
+      <section class="panel stack" style="margin-top:var(--space-lg)"><h2>Review</h2><ul class="list">${boss.answers.map(({ q, ci }) => `<li><span class="${hasJP(q.q) ? "jp" : ""}">${esc(q.q)}</span><span class="small ${ci === q.a ? "" : "muted"}">${ci === q.a ? "Right" : (ci < 0 ? "Skipped" : "You chose " + esc(q.c[ci])) + ". Answer: " + esc(q.c[q.a])}</span>${ci === q.a ? "" : `<span class="small">${esc(q.e)}</span>${explainTab(q, false)}`}</li>`).join("")}</ul></section>`;
     flushEvents();
   }
 
@@ -618,11 +636,86 @@
         <div class="panel stack"><h2>Good to know</h2><ul class="list">${EJU.facts.map(f => `<li>${esc(f)}</li>`).join("")}</ul></div>
         <div class="panel stack"><h2>Game plan to the Gate</h2><ul class="list">${EJU.plan.map(p => `<li><b>${esc(p.when)}</b><span class="muted small">${esc(p.what)}</span></li>`).join("")}</ul></div>
       </section>
-      ${EJU.resources.map(g => `<section class="stack"><h2>${esc(g.group)}</h2><div class="grid-auto">${g.items.map(it => `<div class="panel flat stack">
-        ${it.url ? `<a href="${esc(it.url)}" target="_blank" rel="noopener" class="row" style="gap:6px"><span>${esc(it.name)}</span>${icon("ext", "")}</a>` : `<b>${esc(it.name)}</b>`}
-        <p class="muted small">${esc(it.note)}</p></div>`).join("")}</div></section>`).join("")}
+      <section class="panel stack"><h2>The Japanese test, part by part</h2><div class="table-wrap"><table><thead><tr><th>Part</th><th>Time</th><th>Score</th><th>What happens</th></tr></thead>
+        <tbody>${EJU.japaneseParts.map(p => `<tr><td><b>${esc(p.part)}</b></td><td class="data">${esc(p.time)}</td><td class="data">${esc(p.score)}</td><td>${esc(p.detail)}</td></tr>`).join("")}</tbody></table></div>
+        <div class="row"><a class="btn small primary" href="#/writing">${icon("chip")}Practise writing</a><a class="btn small" href="#/intercept">${icon("wave")}Practise listening</a></div></section>
+      <section class="grid-2">
+        <div class="panel stack"><h2>How scoring works</h2>
+          <p>Every part except writing is <b>scaled</b> with item response theory, so a score from a harder session is worth the same as one from an easier session. There's no pass mark: each university sets its own.</p>
+          <p>The essay is marked by trained raters in levels:</p>
+          <div class="table-wrap"><table><thead><tr><th>Score</th><th>Level</th><th>What it means</th></tr></thead><tbody>${EJU.writingRubric.map(r => `<tr><td class="data">${r[0]}</td><td><b>${r[1]}</b></td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table></div></div>
+        <div class="panel stack"><h2>Where the middle is</h2><p class="muted small">Average and highest scores, ${esc(EJU.averages.label)}.</p>
+          <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Average</th><th>Top</th></tr></thead><tbody>${EJU.averages.rows.map(r => `<tr><td>${esc(r[0])}</td><td class="data">${esc(r[1])}</td><td class="data">${esc(r[2])}</td></tr>`).join("")}</tbody></table></div>
+          <p class="muted small">Physics, chemistry and biology are each out of 100; two of them make the 200-point Science score. <a href="${esc(EJU.averages.source)}" target="_blank" rel="noopener">Source: JASSO</a></p></div>
+      </section>
+      <section class="stack"><h2>What each subject covers (2026 syllabus)</h2><div class="grid-auto">${EJU.syllabus.map(x => `<div class="panel flat stack"><h3>${esc(x.subj)}</h3><ul class="list small">${x.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul><a href="${esc(x.url)}" target="_blank" rel="noopener" class="small">Full syllabus ${icon("ext", "")}</a></div>`).join("")}</div></section>
+      <section class="stack"><h2>Strategy</h2><div class="grid-auto">${EJU.strategy.map(x => `<div class="panel flat stack"><h3>${esc(x.h)}</h3><p class="small">${esc(x.p)}</p></div>`).join("")}</div></section>
+      <section class="panel stack hot"><h2>Past papers and every resource</h2><p>Official past papers, prep books, apps and videos are sorted on their own page.</p><div class="row"><a class="btn primary" href="#/resources">${icon("ext")}Open Resources</a></div></section>
       <p class="muted small">Exam facts are from JASSO's Guidelines for 2027 EJU (published November 2026). Always double-check dates on the JASSO site before applying.</p>
     </div>`;
+  }
+
+  /* ---------- Resources ---------- */
+  function vResources() {
+    scene("mood", "jw");
+    const link = (it) => `<a class="panel flat stack res" href="${esc(it.url)}" target="_blank" rel="noopener"><span class="row between" style="gap:6px"><b>${esc(it.name)}</b>${icon("ext", "")}</span><span class="muted small">${esc(it.note)}</span></a>`;
+    return `<header class="hero"><h1>Resources</h1><p>Every official page, past paper, book, app and video worth his time, sorted by type. Links open the source; nothing is copied here.</p></header>
+      <nav class="tabs res-tabs" aria-label="Jump to section">${EJU.resources.map((g, i) => `<a href="#res-${i}" data-jump="res-${i}">${esc(g.group)}</a>`).join("")}<a href="#res-papers" data-jump="res-papers">Past paper list</a></nav>
+      <div class="stack-lg" style="margin-top:var(--space-lg)">
+      ${EJU.resources.map((g, i) => `<section class="stack" id="res-${i}"><h2>${icon(g.icon, "")} ${esc(g.group)}</h2><div class="grid-auto">${g.items.map(link).join("")}</div></section>`).join("")}
+      <section class="panel stack" id="res-papers"><h2>Official past papers, session by session</h2>
+        <p class="small">Free PDFs from JASSO with question booklets and correct answers. Math and Science are posted up to 2021; Japanese and Japan and the World up to the 2018 1st session. Print one, set a timer, and treat it like the real thing. Newer papers are only in the printed booklets.</p>
+        <div class="table-wrap"><table><thead><tr><th>Session</th><th>Subjects online</th><th></th></tr></thead><tbody>${EJU.pastPapers.map(p => `<tr><td><b>${esc(p.session)}</b></td><td>${esc(p.has)}</td><td><a href="${esc(p.url)}" target="_blank" rel="noopener">Open ${icon("ext", "")}</a></td></tr>`).join("")}</tbody></table></div>
+        <p class="muted small">JASSO owns the copyright on these questions and asks that they aren't reposted, which is why this site links to them instead.</p></section>
+      </div>`;
+  }
+
+  /* ---------- Writing practice (記述) ---------- */
+  let writeTimer = null;
+  function vWriting(id) {
+    scene("mood", "jp");
+    const done = S().writing || {};
+    if (!id) return `<header class="hero"><h1>Writing</h1><p>The EJU essay: pick one of two themes, write 400 to 500 characters in 30 minutes, worth up to 50 points. Each set below is an original practice prompt in the same style.</p></header>
+      <div class="grid-auto">${EJU.writing.map((w, i) => `<a class="panel district" style="min-height:0" href="#/writing/${w.id}"><span class="muted small data">Set ${String(i + 1).padStart(2, "0")}</span><h3>${esc(w.a)}</h3><p class="small jp" lang="ja">${esc(w.pair[0].slice(0, 46))}…</p><span class="small ${done[w.id] ? "" : "muted"}">${done[w.id] ? "Written: " + done[w.id] + " characters" : "Not written yet"}</span></a>`).join("")}</div>
+      <section class="panel stack" style="margin-top:var(--space-xl)"><h2>How it's scored</h2><div class="table-wrap"><table><thead><tr><th>Score</th><th>Level</th><th>What it means</th></tr></thead><tbody>${EJU.writingRubric.map(r => `<tr><td class="data">${r[0]}</td><td><b>${r[1]}</b></td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table></div></section>`;
+    const w = EJU.writing.find(x => x.id === id); if (!w) return vWriting();
+    return `<div class="mission"><div class="mission-top"><a href="#/writing" class="iconbtn" aria-label="Back to prompts">${icon("back")}</a>
+      <div><div class="row between small"><span>Writing, ${esc(w.a)}</span><span class="data" id="wClock">30:00</span></div><div class="bar thin pink"><i id="wBar" style="--p:0"></i></div></div><span></span></div>
+      <section class="panel stack"><p class="muted small">Choose one theme:</p>
+        <div class="seg" id="wPick">${w.pair.map((p, i) => `<button type="button" data-p="${i}" aria-pressed="${i === 0}">Theme ${i + 1}</button>`).join("")}</div>
+        <p class="question jpq" lang="ja" id="wPrompt">${esc(w.pair[0])}</p>
+        <textarea id="wText" lang="ja" rows="12" placeholder="ここに書いてください（400〜500字）" aria-label="Your essay"></textarea>
+        <div class="row between"><span class="data" id="wCount">0 / 500</span><div class="row"><button class="btn small" id="wStart">${icon("play")}Start 30-minute timer</button><button class="btn small primary" id="wDone">${icon("check")}Finish</button></div></div>
+        <details class="steps" open><summary>${icon("intel")}Checklist before you finish</summary><ul class="checks">${EJU.writingChecklist.map((c, i) => `<li><label><input type="checkbox" data-ck="${i}"> ${esc(c)}</label></li>`).join("")}</ul></details>
+        <details class="steps"><summary>${icon("intel")}How to structure it</summary><ol>${EJU.methods.Writing.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
+          <p class="small jp" lang="ja">例：私は〜に賛成である。理由は二つある。第一に、〜。第二に、〜。確かに〜という意見もある。しかし、〜。以上の理由から、私は〜と考える。</p></details>
+      </section></div>`;
+  }
+  function bindWriting(id) {
+    const w = EJU.writing.find(x => x.id === id); if (!w) return;
+    const ta = $("#wText"), cnt = $("#wCount"), key = "neonpass.draft." + id;
+    try { ta.value = localStorage.getItem(key) || ""; } catch (e) {}
+    const upd = () => { const n = ta.value.replace(/\s/g, "").length; cnt.textContent = n + " / 500"; cnt.style.color = n > 500 ? "var(--color-danger)" : n >= 400 ? "var(--color-mint)" : ""; try { localStorage.setItem(key, ta.value); } catch (e) {} return n; };
+    ta.addEventListener("input", upd); upd();
+    $$("#wPick button").forEach(b => b.addEventListener("click", () => { $$("#wPick button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); $("#wPrompt").textContent = w.pair[+b.dataset.p]; sfx("tap"); }));
+    $("#wStart").addEventListener("click", () => {
+      clearInterval(writeTimer); let left = 1800; sfx("alarm"); ta.focus();
+      writeTimer = setInterval(() => {
+        left--; const c = $("#wClock"); if (!c) return clearInterval(writeTimer);
+        c.textContent = clock(left); $("#wBar").style.setProperty("--p", (1 - left / 1800).toFixed(3));
+        if (left === 180) ping("writeLate");
+        if (left <= 0) { clearInterval(writeTimer); sfx("fail"); c.textContent = "Time"; }
+      }, 1000);
+    });
+    $("#wDone").addEventListener("click", () => {
+      clearInterval(writeTimer); const n = upd();
+      if (n < 40) { ping("writeEmpty"); return; }
+      const s = S(); s.writing = s.writing || {}; const first = !s.writing[id]; s.writing[id] = n; Game.save();
+      const ok = n >= 400 && n <= 500, checks = $$("[data-ck]:checked").length;
+      const xp = (ok ? 40 : 20) + checks * 2; Game.addXP(xp, first ? 30 : 10);
+      sfx("levelup"); toast("Essay saved", `${n} characters, +${xp} XP`, "check");
+      ping(ok ? "writeGood" : n < 400 ? "writeShort" : "writeLong"); flushEvents();
+    });
   }
 
   /* ---------- Runner profile and settings ---------- */
@@ -695,7 +788,7 @@
   /* ---------- Router ---------- */
   function route(force) {
     if (speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();
-    clearInterval(bossTimer);
+    clearInterval(bossTimer); clearInterval(writeTimer);
     const pc = $("#allanahPing"); pc && pc.classList.remove("show");
     const parts = location.hash.replace(/^#\/?/, "").split("/");
     const [a, b] = parts;
@@ -711,6 +804,8 @@
       case "crew": html = vCrew(); break;
       case "shop": html = vShop(); break;
       case "intel": html = vIntel(); break;
+      case "resources": html = vResources(); break;
+      case "writing": html = vWriting(b); break;
       case "me": html = vMe(); break;
       default: html = vHub();
     }
@@ -721,6 +816,8 @@
     if (a === "intercept" && b) bindIntercept(b);
     if (a === "shop") bindShop();
     if (a === "me") bindMe();
+    if (a === "writing" && b) bindWriting(b);
+    $$("[data-jump]").forEach(x => x.addEventListener("click", (e) => { e.preventDefault(); const t = document.getElementById(x.dataset.jump); t && t.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }));
     if (a === "boss") { const sb = $("#startBoss"); sb && sb.addEventListener("click", startBoss); }
     $$("[data-story]").forEach(x => x.addEventListener("click", () => showStory(EJU.chapters.find(c => c.lvl === +x.dataset.story))));
     const g2 = $("#openGift2"); g2 && g2.addEventListener("click", showGift);
@@ -737,6 +834,7 @@
   document.addEventListener("keydown", e => {
     if (e.target.matches("input, textarea, select")) return;
     if (/^[1-4]$/.test(e.key)) { const b = $$(".choices .choice")[+e.key - 1]; if (b && !b.disabled) b.click(); }
+    if (e.key === "0") { const b = $("#idk"); if (b && !b.disabled) b.click(); }
     if (e.key === "Enter") { const n = $("#next"); if (n && document.activeElement !== n) n.click(); }
   });
   /* Light hover blips on primary controls */

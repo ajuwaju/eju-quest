@@ -4,7 +4,8 @@ A cyberpunk study game for the EJU (Examination for Japanese University Admissio
 
 ## What's inside
 
-- **Districts:** one per EJU subject (Japanese, Math Course 1 and 2, Physics, Chemistry, Biology, Japan and the World), with 160+ practice questions and explanations.
+- **Districts:** one per EJU subject (Japanese, Math Course 1 and 2, Physics, Chemistry, Biology, Japan and the World), with 320+ original practice questions, an "I don't know" button and step-by-step explanations.
+- **Writing and Resources:** timed Japanese essay practice with original prompts, plus a Resources tab linking every official JASSO past paper, books, apps and free study sites.
 - **Shards:** spaced-repetition flashcards for academic Japanese, grammar, math formulas, science and Japan and the World terms.
 - **Intercepts:** listening drills read aloud by the browser's Japanese voice.
 - **Corp exam:** a timed 20-question mock from your track.

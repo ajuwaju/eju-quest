@@ -156,6 +156,18 @@ EJU.allanah = {
     ["shout", "The EJU won't take 'I forgot' as an answer!"],
     ["shock", "Did you just guess? Be honest."]
   ],
+  idk: [
+    ["calm", "Honest. I like that. Read the steps, then you'll know it."],
+    ["smile", "Good call asking instead of guessing. Open the explanation."],
+    ["shout", "You don't know?? Okay, read it twice. This one comes back later."],
+    ["calm", "Not knowing is fine. Not learning it is not. Read the steps."],
+    ["shock", "Wait, we never covered this? Read it now, quick."]
+  ],
+  writeLate: [["shout", "Three minutes left! Finish your conclusion and check it."]],
+  writeEmpty: [["shout", "You didn't write anything! Don't you want to stay in Japan?? Write!"], ["shock", "That's... not an essay. Try again."]],
+  writeShort: [["shout", "Under 400 characters. Add another reason with an example."], ["calm", "Good start, but too short. Aim for 400 to 500."]],
+  writeLong: [["shock", "Over 500! Cut the extra. Short and sharp wins."]],
+  writeGood: [["smile", "400 to 500, structured, done. I'm so proud of you."], ["smile", "Look at you writing essays in Japanese. Unreal."], ["shout", "THAT'S a real EJU essay. Again tomorrow!"]],
   flatline: [
     ["shout", "Flatlined?! Get back in there right now."],
     ["shout", "Okay, that run was a mess. Again. I'll wait."],
