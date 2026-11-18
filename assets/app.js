@@ -175,6 +175,7 @@
     const due = totalDue(); const miss = Game.mistakes().length;
     return `
     <section class="hero">
+      <span class="kicker">EJU ${esc(ses.label)}<i></i>Level ${Game.level()} ${esc(Game.levelInfo().title)}</span>
       <h1>Get through the Gate<span class="jp" lang="ja">日本留学試験、合格へ</span></h1>
       <div class="countdown"><span class="num data">${d}</span><span class="lbl">days until the EJU on ${fmtDate(ses.exam)}</span></div>
       <div class="row">
@@ -182,7 +183,11 @@
         <a class="btn" href="#/shards">${icon("shard")}Review shards${due ? ` <span class="data">${due}</span>` : ""}</a>
       </div>
     </section>
-    <div class="stack-lg">
+    <div class="hazard" aria-hidden="true"></div>
+    <div class="band">
+      <nav class="tabs" aria-label="Jump to">
+        <a href="#/" aria-current="page">Today</a><a href="#/map">Districts</a><a href="#/shards">Shards</a><a href="#/intercept">Intercepts</a><a href="#/boss">Corp exam</a>
+      </nav>
       <div class="grid-2">
         <section class="panel stack">
           <div class="row between"><h2>Today's gigs</h2><span class="chip">${icon("cred")}Pays creds</span></div>
@@ -195,6 +200,9 @@
           <div class="row"><button class="btn small" data-story="${latest.lvl}">Read message</button><a class="btn small ghost" href="#/crew">All messages</a></div>` : ""}
         </section>
       </div>
+    </div>
+    <div class="hazard flip" aria-hidden="true"></div>
+    <div class="stack-lg">
       <section class="stack">
         <div class="row between"><h2>Districts on your track</h2><a href="#/map">All districts</a></div>
         <div class="grid-auto">${dists.map(districtCard).join("")}</div>
@@ -633,6 +641,7 @@
       default: html = vHub();
     }
     view.innerHTML = html;
+    $$("#view h1").forEach(h => { h.dataset.text = h.firstChild ? h.firstChild.textContent : h.textContent; });
     if (a === "mission" && run) bindMission();
     if (a === "shards" && b) bindDeck();
     if (a === "intercept" && b) bindIntercept(b);
