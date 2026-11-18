@@ -5,5 +5,5 @@ window.EJU_CONFIG = {
   // Who the packet is from.
   giftFrom: "Allanah",
   // Default callsign before he picks his own.
-  defaultCallsign: "Runner"
+  defaultCallsign: "Dhruv"
 };

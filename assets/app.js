@@ -15,8 +15,9 @@
 
   /* ---------- Crew portraits (original, drawn here) ---------- */
   const colorVar = { acid: "var(--color-signal)", pink: "var(--color-pink)", cyan: "var(--color-cyan)", mint: "var(--color-mint)" };
-  function avatar(id, size = "") {
+  function avatar(id, size = "", mood = "calm") {
     const c = EJU.crew[id]; const col = colorVar[c.color];
+    if (c.img) return `<img class="avatar photo ${size}" src="assets/crew/${c.img}-${size === "lg" ? "portrait" : mood}.webp" alt="${esc(c.name)}" width="120" height="120" style="--ring:${col}">`;
     const hair = {
       crop: `<path d="M30 34c0-12 8-18 20-18s20 6 20 18l-4-6H34z" fill="${col}" opacity=".9"/>`,
       bob: `<path d="M28 46c-2-20 8-30 22-30s24 10 22 30l-6 6V34c-6 2-22 2-32 0v18z" fill="${col}" opacity=".9"/>`,
@@ -113,8 +114,9 @@
     sfx("levelup"); scene("levelUp");
     const L = Game.levelInfo();
     overlay(`<div class="levelup"><p class="muted">Level up</p><div class="n data">${n}</div><h2>${esc(L.title)}</h2>
-      <p class="muted">Keep running missions. New crew messages unlock as you climb.</p>
+      ${talkHTML(line("levelUp"), "comm")}
       <button class="btn primary" data-close>Keep going</button></div>`, (ov, close) => {
+        animateTalk(ov);
         ov.querySelector("[data-close]").addEventListener("click", () => { if (pendingStory.length) setTimeout(() => showStory(pendingStory.shift()), 50); });
       });
   }
@@ -130,7 +132,7 @@
   function showGift() {
     const cfg = window.EJU_CONFIG || {};
     const text = (cfg.giftNote || "") + "\n\n" + (cfg.giftFrom ? "From " + cfg.giftFrom : "");
-    overlay(`<div class="stack"><h2>Encrypted packet</h2><div class="decrypt" id="dec"></div><button class="btn primary" data-close>Close</button></div>`, (ov) => {
+    overlay(`<div class="stack"><div class="msg">${avatar("allanah", "", "smile")}<div><div class="who">Allanah <span>Net diver, your partner</span></div><h2 style="margin-top:6px">Encrypted packet</h2></div></div><div class="decrypt" id="dec"></div><button class="btn primary" data-close>Close</button></div>`, (ov) => {
       const el = ov.querySelector("#dec"); const glyphs = "アイウエオカキクケコ01#%&*<>/\\";
       const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (reduce) { el.textContent = text; }
@@ -174,6 +176,8 @@
     const latest = EJU.chapters.filter(c => c.lvl <= Game.level()).pop();
     const due = totalDue(); const miss = Game.mistakes().length;
     return `
+    <div class="hero-wrap">
+    <figure class="key-art" aria-hidden="true"><img src="assets/crew/dhruv-city.webp" alt="" width="1060" height="941"></figure>
     <section class="hero">
       <span class="kicker">EJU ${esc(ses.label)}<i></i>Level ${Game.level()} ${esc(Game.levelInfo().title)}</span>
       <h1>Get through the Gate<span class="jp" lang="ja">日本留学試験、合格へ</span></h1>
@@ -183,6 +187,7 @@
         <a class="btn" href="#/shards">${icon("shard")}Review shards${due ? ` <span class="data">${due}</span>` : ""}</a>
       </div>
     </section>
+    </div>
     <div class="hazard" aria-hidden="true"></div>
     <div class="band">
       <nav class="tabs" aria-label="Jump to">
@@ -277,12 +282,14 @@
   function missionHTML() {
     const q = run.list[run.i];
     const order = q._order || (q._order = shuffle(q.c.map((_, i) => i)));
+    if (!run.line) { const [m, t] = line("start"); run.mood = m; run.line = t; }
     return `<div class="mission">
       <div class="mission-top">
         <div class="integrity" aria-label="Integrity ${run.hp} of ${run.maxHP}">${Array.from({ length: run.maxHP }, (_, i) => `<i class="${i < run.hp ? "" : "off"}"></i>`).join("")}</div>
         <div><div class="row between small"><span>${esc(run.title)}</span><span class="data">${run.i + 1}/${run.list.length}</span></div><div class="bar thin"><i style="--p:${(run.i / run.list.length).toFixed(3)}"></i></div></div>
         <div class="combo data" aria-label="Combo">${S().combo > 1 ? "x" + S().combo : ""}</div>
       </div>
+      <div id="commBox" aria-live="polite">${talkHTML([run.mood, run.line], "comm")}</div>
       <section class="panel stack" id="qpanel">
         <div class="row between"><span class="topic">${esc(subj(q.s).name)}, ${esc(q.t)}</span>
           ${run.optic ? `<button class="btn small ghost" id="optic">${icon("scan")}Scanner optic</button>` : ""}</div>
@@ -294,12 +301,67 @@
     </div>`;
   }
   function bindMission() {
+    if (run.i === 0 && !run.answered) animateTalk($("#commBox"));
     $$(".choice").forEach(b => b.addEventListener("pointerdown", () => sfx("tap")));
     $$(".choice").forEach(b => b.addEventListener("click", (e) => choose(+b.dataset.ci, b, e)));
     const op = $("#optic"); op && op.addEventListener("click", () => {
       const q = run.list[run.i]; const wrong = shuffle(q.c.map((_, i) => i).filter(i => i !== q.a)).slice(0, 2);
       wrong.forEach(i => { const b = $(`.choice[data-ci="${i}"]`); b.classList.add("struck"); b.disabled = true; });
       run.optic = false; op.remove(); sfx("glitch");
+    });
+  }
+  /* Allanah's lines: avoid repeating the last few in each pool. */
+  const recent = {};
+  function line(kind) {
+    const pool = EJU.allanah[kind]; const seen = recent[kind] || (recent[kind] = []);
+    const fresh = pool.map((_, i) => i).filter(i => !seen.includes(i));
+    const i = fresh[Math.floor(Math.random() * fresh.length)];
+    seen.push(i); if (seen.length > Math.min(4, pool.length - 1)) seen.shift();
+    return pool[i];
+  }
+  /* A comms card that pops in from the corner on any screen. */
+  let pingTimer, hubPinged = 0;
+  function ping(kind, delay = 0) {
+    if (!EJU.allanah[kind]) return;
+    const [mood, text] = line(kind);
+    setTimeout(() => {
+      let el = $("#allanahPing");
+      if (!el) { el = document.createElement("div"); el.id = "allanahPing"; el.className = "ping-card"; el.setAttribute("role", "status"); document.body.appendChild(el); }
+      el.innerHTML = `${talkHTML([mood, text], "ping-body")}<button class="ping-x" type="button" aria-label="Dismiss">${icon("x")}</button>`;
+      el.classList.remove("show"); void el.offsetWidth; el.classList.add("show"); animateTalk(el);
+      el.querySelector(".ping-x").addEventListener("click", () => el.classList.remove("show"));
+      sfx(mood === "shout" ? "deny" : "tick");
+      clearTimeout(pingTimer); pingTimer = setTimeout(() => el.classList.remove("show"), 6500);
+    }, delay);
+  }
+  function comm(kind) {
+    const [mood, text] = line(kind);
+    run.mood = mood; run.line = text;
+    const box = $("#commBox"); if (!box) return;
+    box.innerHTML = talkHTML([mood, text], "comm"); animateTalk(box);
+  }
+  /* Talking portrait: types the line while flipping between closed- and open-mouth frames from her sheet. */
+  const MOUTH = { calm: ["calm", "shock"], smile: ["smile", "shock"], shout: ["calm", "shout"], shock: ["calm", "shock"] };
+  ["calm", "smile", "shout", "shock"].forEach(m => { const i = new Image(); i.src = `assets/crew/allanah-${m}.webp`; });
+  function talkHTML([mood, text], cls = "") {
+    return `<div class="talker ${cls}" data-mood="${mood}">${avatar("allanah", "sm", mood)}<div><b>Allanah</b><p><span class="sr">${esc(text)}</span><span class="say" aria-hidden="true">${esc(text)}</span></p></div></div>`;
+  }
+  function animateTalk(root = document) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    root.querySelectorAll(".talker:not(.talked)").forEach(t => {
+      t.classList.add("talked"); if (reduce) return;
+      const mood = t.dataset.mood, img = t.querySelector("img"), say = t.querySelector(".say");
+      const full = say.textContent, [closed, open] = MOUTH[mood] || MOUTH.calm;
+      const src = m => `assets/crew/allanah-${m}.webp`;
+      let i = 0, flip = false, last = 0; say.textContent = ""; t.classList.add("talking");
+      const step = (now) => {
+        if (!t.isConnected) return;
+        i = Math.min(full.length, i + 1); say.textContent = full.slice(0, i);
+        if (now - last > 120) { last = now; flip = !flip && full[i - 1] !== " "; img.src = src(flip ? open : closed); }
+        if (i < full.length) setTimeout(() => requestAnimationFrame(step), 26);
+        else { img.src = src(mood); t.classList.remove("talking"); }
+      };
+      requestAnimationFrame(step);
     });
   }
   function choose(ci, btn, e) {
@@ -315,7 +377,9 @@
       Game.addXP(xp, cr);
       combo > 2 ? sfx("combo", combo) : sfx("correct"); scene("pulse");
       floatText("+" + xp + " XP", r.left + r.width - 120, r.top);
+      comm(combo >= 4 ? "combo" : "right");
     } else {
+      comm("wrong");
       btn.classList.add("wrong"); run.hp--; sfx("wrong"); scene("hit");
       $$(".integrity i").forEach((el, k) => el.classList.toggle("off", k >= run.hp));
       $("#qpanel").classList.remove("shake"); void $("#qpanel").offsetWidth; $("#qpanel").classList.add("shake");
@@ -339,11 +403,13 @@
       ${flat ? `<h2>Flatlined</h2><p class="muted">Integrity hit zero. Every point you earned still counts. Patch up and run it again.</p>` :
         `${pct >= 0.8 ? `<div class="stamp" lang="ja">合格</div>` : ""}<h2>${clean ? "Clean run" : "Run complete"}</h2>`}
       <div class="big data">${run.right}/${run.i + 1}</div>
+      <div style="max-width:460px;width:100%;text-align:left">${talkHTML(line(flat ? "flatline" : clean ? "clean" : pct < 0.5 ? "wrong" : "done"), "comm")}</div>
       <div class="row" style="justify-content:center"><span class="chip on">${icon("bolt")}+${run.xp} XP</span><span class="chip on">${icon("cred")}+${Math.round(run.creds * Game.mult())} creds</span></div>
       <div class="row" style="justify-content:center">
         ${run.district ? `<a class="btn primary" href="#/mission/${run.district}" id="again">${icon("play")}Run it again</a><a class="btn" href="#/district/${run.district}">District</a>` : `<a class="btn primary" href="#/mission/mistakes" id="again">Keep fixing</a>`}
         <a class="btn ghost" href="#/">Hub</a></div>
     </section>`;
+    animateTalk(view);
     $("#again") && $("#again").addEventListener("click", (e) => { e.preventDefault(); route(true); });
     flushEvents();
   }
@@ -363,7 +429,7 @@
     const pool = shuffle(EJU.questions.filter(q => subs.includes(q.s))).slice(0, 20);
     const secs = Math.round(pool.length * 60 * (S().ware.reflex ? 1.25 : 1));
     boss = { list: pool, i: 0, right: 0, left: secs, total: secs, answers: [] };
-    sfx("alarm"); renderBoss();
+    sfx("alarm"); renderBoss(); ping("bossStart", 300);
     clearInterval(bossTimer);
     bossTimer = setInterval(() => {
       boss.left--; const t = $("#bossClock"); if (t) t.textContent = clock(boss.left);
@@ -389,7 +455,7 @@
     const total = boss.list.length, pct = boss.right / total;
     Game.finishBoss(boss.right, total);
     const xp = boss.right * 12; Game.addXP(xp, boss.right * 10);
-    sfx(pct >= 0.7 ? "levelup" : "fail");
+    sfx(pct >= 0.7 ? "levelup" : "fail"); ping(pct >= 0.7 ? "bossPass" : "bossFail", 900);
     view.innerHTML = `<section class="panel result">${pct >= 0.7 ? `<div class="stamp" lang="ja">合格</div>` : ""}<h2>${pct >= 0.7 ? "Corp breached" : "Security held. This time."}</h2>
       <div class="big data">${Math.round(pct * 100)}%</div><p class="muted">${boss.right} of ${total} right with ${clock(boss.left)} left. +${xp} XP.</p>
       <div class="row" style="justify-content:center"><a class="btn primary" href="#/mission/mistakes">Fix the glitches</a><a class="btn ghost" href="#/">Hub</a></div></section>
@@ -441,7 +507,8 @@
     Game.addXP(good ? 3 : 1, good ? 2 : 0);
     sfx(good ? "correct" : "tap"); if (good) scene("pulse");
     shard.good += good ? 1 : 0;
-    if (!good) shard.queue.push(shard.queue[shard.i]);
+    if (!good) { shard.queue.push(shard.queue[shard.i]); if (Math.random() < 0.7) ping("cardBad"); }
+    else if (shard.good % 4 === 0) ping("cardGood");
     shard.i++;
     if (shard.i >= shard.queue.length) {
       view.innerHTML = `<section class="panel result"><h2>Deck cleared</h2><div class="big data">${shard.good}</div><p class="muted">shards locked in.</p><div class="row" style="justify-content:center"><a class="btn primary" href="#/shards">More decks</a><a class="btn ghost" href="#/">Hub</a></div></section>`;
@@ -489,8 +556,14 @@
   function vCrew() {
     scene("mood", "hub");
     const lvl = Game.level();
-    return `<header class="hero"><h1>The crew</h1><p>Four people who want you through the Gate. New messages unlock as you level up.</p></header>
-      <div class="grid-2" style="margin-bottom:var(--space-xl)">${Object.keys(EJU.crew).map(k => { const c = EJU.crew[k];
+    const leads = Object.keys(EJU.crew).filter(k => EJU.crew[k].lead);
+    return `<header class="hero"><h1>The crew</h1><p>You, your partner, and four people who want you through the Gate. New messages unlock as you level up.</p></header>
+      <div class="grid-2 leads" style="margin-bottom:var(--space-lg)">${leads.map(k => { const c = EJU.crew[k];
+        return `<section class="panel lead" style="--ring:${colorVar[c.color]}"><img class="lead-art" src="assets/crew/${c.img}-portrait.webp" alt="${esc(c.name)}" width="356" height="490" loading="lazy">
+          <div class="stack"><span class="kicker">${k === "dhruv" ? "Lead" : "Partner"}</span><h2>${esc(c.name)}</h2><p class="muted small">${esc(c.role)}</p><p>${esc(c.bio)}</p>
+          <div class="moods">${["calm", "smile", "shout", "shock"].map(m => `<img src="assets/crew/${c.img}-${m}.webp" alt="" width="64" height="64" loading="lazy">`).join("")}</div></div></section>`; }).join("")}</div>
+      <h2 style="margin-bottom:var(--space-md)">Side crew</h2>
+      <div class="grid-2" style="margin-bottom:var(--space-xl)">${Object.keys(EJU.crew).filter(k => !EJU.crew[k].lead).map(k => { const c = EJU.crew[k];
         return `<section class="panel msg">${avatar(k, "lg")}<div><h3>${esc(c.name)}</h3><p class="muted small">${esc(c.role)}${EJU.districts.filter(d => d.crew === k).length ? ", runs " + EJU.districts.filter(d => d.crew === k).map(d => d.name).join(", ") : ""}</p><p>${esc(c.bio)}</p></div></section>`; }).join("")}</div>
       <section class="stack"><h2>Messages</h2>
       ${EJU.chapters.map(c => c.lvl <= lvl ? `<div class="panel flat msg">${avatar(c.from, "sm")}<div><div class="who">${esc(EJU.crew[c.from].name)} <span>${esc(c.title)}</span></div><p>${esc(storyText(c))}</p>${c.gift ? `<button class="btn small primary" style="margin-top:8px" id="openGift2">${icon("lock")}Decrypt the packet</button>` : ""}</div></div>`
@@ -623,6 +696,7 @@
   function route(force) {
     if (speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();
     clearInterval(bossTimer);
+    const pc = $("#allanahPing"); pc && pc.classList.remove("show");
     const parts = location.hash.replace(/^#\/?/, "").split("/");
     const [a, b] = parts;
     let html;
@@ -652,6 +726,10 @@
     const g2 = $("#openGift2"); g2 && g2.addEventListener("click", showGift);
     renderNav(); renderHUD();
     if (!force) window.scrollTo(0, 0);
+    if ((!a || a === "hub") && S().onboarded && Date.now() - hubPinged > 180000) {
+      hubPinged = Date.now(); const s = S();
+      ping(s.dayXP >= s.dailyGoal ? "hubDone" : s.dayXP > 0 ? "hubSome" : (s.uptime === 0 && s.bestUptime > 0) ? "hubStreakLost" : "hubLazy", 1200);
+    }
     $("#main").focus({ preventScroll: true });
   }
 
