@@ -7,7 +7,7 @@
 
   const fresh = () => ({
     v: 1, callsign: (window.EJU_CONFIG && EJU_CONFIG.defaultCallsign) || "Runner", onboarded: false,
-    track: "all", session: "jun2027", dailyGoal: 60,
+    track: "sci", session: "jun2027", dailyGoal: 60,
     xp: 0, creds: 0, uptime: 0, bestUptime: 0, lastGoalDay: null,
     day: today(), dayXP: 0, history: {},
     q: {},            // question id -> { seen, right, lastRight }
@@ -127,17 +127,17 @@
 
   /* ---------- Gigs (daily contracts) ---------- */
   function rng(seed) { let s = 0; for (const ch of seed) s = (s * 31 + ch.charCodeAt(0)) >>> 0; return () => ((s = (s * 1664525 + 1013904223) >>> 0) / 4294967296); }
-  function trackSubjects() { return (EJU.tracks.find(t => t.id === S.track) || EJU.tracks[2]).subjects; }
+  function trackSubjects() { return (EJU.tracks.find(t => t.id === S.track) || EJU.tracks[0]).subjects; }
   function gigs() {
     rollDay();
     if (S.gigs && S.gigs.day === S.day) return S.gigs.list;
     const r = rng(S.day + S.callsign); const subs = trackSubjects();
     const pickSub = subs[Math.floor(r() * subs.length)]; const dist = EJU.districts.find(d => d.subject === pickSub);
     const pool = [
-      { id: "run", kind: "run", target: 1, district: dist.id, text: "Run a mission in " + dist.name, reward: 60 },
+      { id: "run", kind: "run", target: 1, district: dist.id, text: "Do a quiz or practice run in " + ((EJU.subjects.find(x => x.id === pickSub) || dist).name), reward: 60 },
       { id: "shards", kind: "shards", target: 15 + Math.floor(r() * 3) * 5, text: "", reward: 50 },
       { id: "combo", kind: "combo", target: 4 + Math.floor(r() * 3), text: "", reward: 70 },
-      { id: "listen", kind: "listen", target: 1, text: "Decode a listening intercept", reward: 50 },
+      { id: "lesson", kind: "lesson", target: 1, text: "Pass a lesson quiz", reward: 60 },
       { id: "xp", kind: "xp", target: S.dailyGoal, text: "", reward: 40 }
     ];
     pool[1].text = "Review " + pool[1].target + " shards";

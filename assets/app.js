@@ -45,12 +45,14 @@
 
   /* ---------- Navigation ---------- */
   const NAV = [
-    ["#/", "hub", "Hub"], ["#/map", "map", "Districts"], ["#/shards", "shard", "Shards"], ["#/intercept", "wave", "Intercepts"],
-    ["#/boss", "target", "Corp exam"], ["#/writing", "chip", "Writing"], ["#/crew", "crew", "Crew"], ["#/shop", "shop", "Chrome clinic"], ["#/intel", "intel", "Intel"], ["#/resources", "ext", "Resources"], ["#/me", "user", "Runner"]
+    ["#/", "hub", "Hub"], ["#/subject/m2", "chip", "Math"], ["#/subject/phy", "bolt", "Physics"], ["#/subject/chem", "shard", "Chemistry"],
+    ["#/checklist", "check", "Checklist"], ["#/unis", "map", "Universities"], ["#/shards", "scan", "Shards"],
+    ["#/boss", "target", "Corp exam"], ["#/crew", "crew", "Crew"], ["#/shop", "shop", "Chrome clinic"], ["#/intel", "intel", "Intel"], ["#/resources", "ext", "Resources"], ["#/me", "user", "Runner"]
   ];
-  const MOBILE = [["#/", "hub", "Hub"], ["#/map", "map", "Districts"], ["#/shards", "shard", "Shards"], ["#/intel", "intel", "Intel"], ["#/resources", "ext", "Resources"]];
+  const MOBILE = [["#/", "hub", "Hub"], ["#/subject/m2", "chip", "Math"], ["#/subject/phy", "bolt", "Physics"], ["#/subject/chem", "shard", "Chem"], ["#/checklist", "check", "Checklist"], ["#/unis", "map", "Unis"]];
+  function navKey(h) { const p = h.replace(/^#\/?/, "").split("/"); if (p[0] === "lesson" || p[0] === "district") { const l = (EJU.lessons.find(x => x.id === p[1]) || {}).s || p[1]; return "#/subject/" + l; } if (p[0] === "mission" && /^lesson-/.test(p[1] || "")) { const l = EJU.lessons.find(x => "lesson-" + x.id === p[1]); return l ? "#/subject/" + l.s : "#/"; } if (p[0] === "subject") return "#/subject/" + p[1]; return "#/" + (p[0] || ""); }
   function renderNav() {
-    const cur = "#/" + (location.hash.replace(/^#\/?/, "").split("/")[0] || "");
+    const cur = navKey(location.hash);
     const due = totalDue();
     $("#nav").innerHTML = NAV.map(([h, i, l]) => `<a href="${h}" ${cur === h ? 'aria-current="page"' : ""}>${icon(i)}<span>${l}</span>${h === "#/shards" && due ? `<span class="count">${due}</span>` : ""}</a>`).join("");
     $("#mobilebar").innerHTML = MOBILE.map(([h, i, l]) => `<a href="${h}" ${cur === h ? 'aria-current="page"' : ""}>${icon(i)}<span>${l}</span></a>`).join("");
@@ -74,7 +76,7 @@
   function toast(title, text, ic = "bolt") {
     const t = document.createElement("div"); t.className = "toast";
     t.innerHTML = `${icon(ic)}<div><b>${esc(title)}</b><span>${esc(text)}</span></div>`;
-    $("#toasts").appendChild(t); setTimeout(() => t.remove(), 4200);
+    const box = $("#toasts"); box.appendChild(t); while (box.children.length > 3) box.firstElementChild.remove(); setTimeout(() => t.remove(), 4200);
   }
   function overlay(html, onBind) {
     const root = $("#overlayRoot");
@@ -167,31 +169,36 @@
 
   /* ================= VIEWS ================= */
 
+  function lessonState(id) { const L = (S().lessons || {})[id]; return L ? (L.passed ? "passed" : L.best != null ? "tried" : "read") : "new"; }
+  function nextLesson(sub) { return EJU.lessons.filter(l => !sub || l.s === sub).find(l => lessonState(l.id) !== "passed"); }
+  function checklistItems() {
+    const base = EJU.checklist.flatMap(g => g.items.map(i => i[0]));
+    return base.concat(EJU.lessons.map(l => "lesson:" + l.id), (S().customChecks || []).map(c => c.id));
+  }
+  function checkDone(id) { return !!(S().checks || {})[id]; }
   function vHub() {
-    scene("mood", "hub");
     const s = S(), ses = session(), d = daysTo(ses.exam);
     const gigs = Game.gigs();
-    const subs = Game.trackSubjects();
-    const dists = EJU.districts.filter(x => subs.includes(x.subject));
     const latest = EJU.chapters.filter(c => c.lvl <= Game.level()).pop();
     const due = totalDue(); const miss = Game.mistakes().length;
+    const nl = nextLesson(); const all = checklistItems(); const done = all.filter(checkDone).length;
     return `
     <div class="hero-wrap">
     <figure class="key-art" aria-hidden="true"><img src="assets/crew/dhruv-city.webp" alt="" width="1060" height="941"></figure>
     <section class="hero">
-      <span class="kicker">EJU ${esc(ses.label)}<i></i>Level ${Game.level()} ${esc(Game.levelInfo().title)}</span>
-      <h1>Get through the Gate<span class="jp" lang="ja">日本留学試験、合格へ</span></h1>
+      <span class="kicker">EJU ${esc(ses.label)}<i></i>Math Course 2 + Physics + Chemistry</span>
+      <h1>Get through the Gate</h1>
       <div class="countdown"><span class="num data">${d}</span><span class="lbl">days until the EJU on ${fmtDate(ses.exam)}</span></div>
       <div class="row">
-        <a class="btn primary" href="#/mission/${dists[0].id}" id="quickRun">${icon("play")}Run a mission</a>
-        <a class="btn" href="#/shards">${icon("shard")}Review shards${due ? ` <span class="data">${due}</span>` : ""}</a>
+        ${nl ? `<a class="btn primary" href="#/lesson/${nl.id}" id="quickRun">${icon("play")}Next lesson: ${esc(nl.n)}</a>` : `<a class="btn primary" href="#/boss">${icon("target")}Take the Corp exam</a>`}
+        <a class="btn" href="#/checklist">${icon("check")}Checklist <span class="data">${done}/${all.length}</span></a>
       </div>
     </section>
     </div>
     <div class="hazard" aria-hidden="true"></div>
     <div class="band">
       <nav class="tabs" aria-label="Jump to">
-        <a href="#/" aria-current="page">Today</a><a href="#/map">Districts</a><a href="#/shards">Shards</a><a href="#/intercept">Intercepts</a><a href="#/boss">Corp exam</a>
+        <a href="#/" aria-current="page">Today</a>${EJU.subjects.map(x => `<a href="#/subject/${x.id}">${esc(x.short)}</a>`).join("")}<a href="#/checklist">Checklist</a><a href="#/unis">Universities</a>
       </nav>
       <div class="grid-2">
         <section class="panel stack">
@@ -209,62 +216,81 @@
     <div class="hazard flip" aria-hidden="true"></div>
     <div class="stack-lg">
       <section class="stack">
-        <div class="row between"><h2>Districts on your track</h2><a href="#/map">All districts</a></div>
-        <div class="grid-auto">${dists.map(districtCard).join("")}</div>
+        <div class="row between"><h2>His three subjects</h2><a href="#/intel">About the exam</a></div>
+        <div class="grid-auto">${EJU.subjects.map(subjectCard).join("")}</div>
       </section>
       <div class="grid-3">
-        <a class="panel flat district" href="#/intercept" style="min-height:0"><h3>${icon("wave", "")} Intercepts</h3><p class="muted small">Listening drills read aloud in Japanese.</p></a>
-        <a class="panel flat district" href="#/boss" style="min-height:0"><h3>Corp exam</h3><p class="muted small">${Game.level() >= 3 ? "Timed 20-question mock. No armor." : "Unlocks at level 3."}</p></a>
+        <a class="panel flat district" href="#/unis" style="min-height:0"><h3>Universities</h3><p class="muted small">Aizu, Kyushu and ${EJU.universities.length - 2 + (s.unis || []).length} more that take his EJU subjects.</p></a>
+        <a class="panel flat district" href="#/boss" style="min-height:0"><h3>Corp exam</h3><p class="muted small">${Game.level() >= 3 ? "Timed 20-question mock across all three subjects." : "Unlocks at level 3."}</p></a>
         <a class="panel flat district" href="#/mission/mistakes" style="min-height:0"><h3>Glitch log</h3><p class="muted small">${miss ? miss + " questions to fix." : "No open mistakes. Clean."}</p></a>
       </div>
     </div>`;
   }
-  function districtCard(d) {
-    const c = Game.control(d.subject), q = EJU.questions.filter(x => x.s === d.subject).length;
-    const col = { sable: "pink", gear: "cyan", nyx: "mint", rook: "" }[d.crew];
-    return `<a class="panel district" href="#/district/${d.id}">
-      <span class="jp" lang="ja">${d.jp}</span><h3>${esc(d.name)}</h3>
-      <p class="muted small">${esc(subj(d.subject).long)}. ${q} missions on file.</p>
-      <div class="ctl"><span><span>Control</span><span class="data">${Math.round(c * 100)}%</span></span><div class="bar thin ${col}"><i style="--p:${c.toFixed(3)}"></i></div></div>
+  function subjectCard(x) {
+    const ls = EJU.lessons.filter(l => l.s === x.id), passed = ls.filter(l => lessonState(l.id) === "passed").length;
+    const nl = nextLesson(x.id);
+    return `<a class="panel district" href="#/subject/${x.id}">
+      <span class="jp" lang="ja">${x.jp}</span><h3>${esc(x.name)}</h3>
+      <p class="muted small">${ls.length} lessons, ${EJU.questions.filter(q => q.s === x.id).length} questions. ${nl ? "Next: " + esc(nl.n) + "." : "Every lesson passed."}</p>
+      <div class="ctl"><span><span>Lessons passed</span><span class="data">${passed}/${ls.length}</span></span><div class="bar thin"><i style="--p:${(passed / ls.length).toFixed(3)}"></i></div></div>
     </a>`;
   }
-
-  function vMap() {
-    scene("mood", "hub");
-    const subs = Game.trackSubjects();
-    return `<header class="stack" style="margin-bottom:var(--space-lg)"><h1>Districts</h1><p class="muted">Every district is one EJU subject. Answer a question right once and that block is yours. Your track: <b>${esc(EJU.tracks.find(t => t.id === S().track).name)}</b>.</p></header>
-      <div class="grid-auto">${EJU.districts.map(d => districtCard(d) .replace('class="panel district"', `class="panel district" style="${subs.includes(d.subject) ? "" : "opacity:.6"}"`)).join("")}</div>`;
+  /* ---------- Subject tab: lessons in order, then practice ---------- */
+  function vSubject(id) {
+    const x = subj(id); if (!x) return vHub();
+    const d = district(id), c = EJU.crew[d.crew];
+    const ls = EJU.lessons.filter(l => l.s === id);
+    const miss = Game.mistakes().filter(q => q.s === id).length;
+    const deck = EJU.decks.find(k => k.subject === id);
+    const nl = nextLesson(id);
+    const tag = { passed: "Passed", tried: "Quiz not passed yet", read: "Read, quiz not taken", new: "Not started" };
+    return `<header class="hero" style="padding-top:var(--space-md)"><span class="kicker">${esc(x.long)}<i></i>${ls.length} lessons</span><h1>${esc(x.name)}</h1>
+      <p>Each lesson is two halves: read the notes and the worked example, then answer the quiz on exactly that lesson. Pass with 70% to tick it off.</p>
+      <div class="row">${nl ? `<a class="btn primary" href="#/lesson/${nl.id}">${icon("play")}Continue: ${esc(nl.n)}</a>` : ""}<a class="btn" href="#/mission/${id}">${icon("target")}Mixed practice</a>${miss ? `<a class="btn" href="#/mission/mistakes-${id}">Fix ${miss} glitches</a>` : ""}${deck ? `<a class="btn ghost" href="#/shards/${deck.id}">${icon("shard")}${esc(deck.name)}</a>` : ""}</div></header>
+    <ol class="lessons">${ls.map((l, i) => { const st = lessonState(l.id), L = (S().lessons || {})[l.id] || {};
+      return `<li class="panel flat lesson-row ${st}"><span class="num data">${String(i + 1).padStart(2, "0")}</span>
+        <div class="stack" style="gap:4px"><a href="#/lesson/${l.id}"><b>${esc(l.n)}</b></a><span class="muted small">${esc(l.goal)}</span></div>
+        <span class="state small">${st === "passed" ? icon("check") : ""}${tag[st]}${L.best != null ? ` <span class="data">${L.best}%</span>` : ""}</span></li>`; }).join("")}</ol>
+    <section class="panel stack" style="margin-top:var(--space-xl)"><div class="msg">${avatar(d.crew)}<div><div class="who">${esc(c.name)} <span>${esc(c.role)}</span></div><p>${esc(c.bio)}</p></div></div>
+      <p class="muted small">Mixed practice draws 8 questions from the whole subject. Three wrong answers and you're flatlined, but you keep every XP you earned.</p></section>`;
   }
 
-  function vDistrict(id) {
-    const d = district(id); if (!d) return vHub();
-    scene("mood", id);
-    const qs = EJU.questions.filter(q => q.s === d.subject);
-    const topics = {};
-    qs.forEach(q => { const t = topics[q.t] || (topics[q.t] = { n: 0, got: 0, seen: 0 }); t.n++; const r = S().q[q.id]; if (r) { t.seen++; if (r.right) t.got++; } });
-    const c = EJU.crew[d.crew]; const miss = Game.mistakes().filter(q => q.s === d.subject).length;
-    const deck = EJU.decks.find(k => k.subject === d.subject);
-    return `<a href="#/map" class="small">${icon("back", "")}Districts</a>
-    <header class="hero" style="padding-top:var(--space-md)"><span class="jp muted" lang="ja">${d.jp}</span><h1>${esc(d.name)}</h1><p>${esc(d.blurb)}</p>
-      <div class="row"><a class="btn primary" href="#/mission/${d.id}">${icon("play")}Start mission</a>${miss ? `<a class="btn" href="#/mission/mistakes-${d.id}">Fix ${miss} glitches</a>` : ""}${deck ? `<a class="btn ghost" href="#/shards/${deck.id}">${icon("shard")}${esc(deck.name)} shards</a>` : ""}</div></header>
-    <div class="grid-2">
-      <section class="panel stack"><h2>Control by topic</h2>
-        <ul class="list">${Object.entries(topics).map(([t, v]) => `<li><div class="row between"><span>${esc(t)}</span><span class="data small">${v.got}/${v.n}</span></div><div class="bar thin"><i style="--p:${(v.got / v.n).toFixed(3)}"></i></div></li>`).join("")}</ul>
-      </section>
-      <section class="panel stack"><div class="msg">${avatar(d.crew)}<div><div class="who">${esc(c.name)} <span>${esc(c.role)}</span></div><p>${esc(c.bio)}</p></div></div>
-        <p class="muted small">Missions draw 8 questions from this district. Three wrong answers and you're flatlined, but you keep every XP you earned.</p></section>
-    </div>`;
+  /* ---------- Lesson: learn first, quiz after ---------- */
+  function vLesson(id) {
+    const l = EJU.lessons.find(x => x.id === id); if (!l) return vHub();
+    const s = S(); s.lessons = s.lessons || {}; s.lessons[id] = s.lessons[id] || {}; if (!s.lessons[id].read) { s.lessons[id].read = Game.today(); Game.save(); }
+    const ls = EJU.lessons.filter(x => x.s === l.s), i = ls.indexOf(l), x = subj(l.s);
+    const n = EJU.lessonPool(l).length;
+    return `<a href="#/subject/${l.s}" class="small">${icon("back", "")}${esc(x.name)}</a>
+    <article class="lesson">
+      <header class="hero" style="padding-top:var(--space-md)"><span class="kicker">${esc(x.name)}<i></i>Lesson ${i + 1} of ${ls.length}</span><h1>${esc(l.n)}</h1><p>${esc(l.goal)}</p>
+        <div class="split-meter" aria-hidden="true"><span class="on">1. Learn</span><span>2. Quiz</span></div></header>
+      <div id="lessonComm">${talkHTML(line("lessonStart"), "comm")}</div>
+      <div class="grid-2 lesson-grid">${l.sections.map(sec => `<section class="panel stack"><h2>${esc(sec.h)}</h2>${sec.p ? `<p>${esc(sec.p)}</p>` : ""}<ul class="list">${sec.list.map(t => `<li>${esc(t)}</li>`).join("")}</ul></section>`).join("")}</div>
+      <section class="panel stack hot-edge"><h2>Worked example</h2><p class="question">${esc(l.example.q)}</p>
+        <details class="steps"><summary>${icon("intel")}Try it first, then open the solution</summary><ol>${l.example.steps.map(t => `<li>${esc(t)}</li>`).join("")}</ol></details></section>
+      <div class="grid-2"><section class="panel stack"><h2>Traps</h2><ul class="list">${l.traps.map(t => `<li>${esc(t)}</li>`).join("")}</ul></section>
+        <section class="panel stack"><h2>Exam tip</h2><p>${esc(l.tip)}</p></section></div>
+      <section class="panel stack hot"><h2>Now the quiz</h2><p>${Math.min(8, n)} questions on this lesson only, drawn from ${n}. Get 70% or more to pass and tick it off. "I don't know" is always there, and every answer has a step-by-step explanation.</p>
+        <div class="row"><a class="btn primary" href="#/mission/lesson-${l.id}">${icon("play")}Start the quiz</a>${ls[i + 1] ? `<a class="btn ghost" href="#/lesson/${ls[i + 1].id}">Skip to next lesson</a>` : ""}</div></section>
+    </article>`;
   }
 
   /* ---------- Mission runner ---------- */
   let run = null;
   function vMission(arg) {
-    let pool, title, moodKey = "hub", dId = null;
+    let pool, title, moodKey = "hub", dId = null, lessonId = null;
     if (arg === "mistakes" || (arg || "").startsWith("mistakes-")) {
       const only = arg.split("-")[1];
       pool = Game.mistakes().filter(q => !only || q.s === only);
       title = "Glitch log";
-      if (!pool.length) return `<section class="panel result"><h2>No glitches to fix</h2><p class="muted">Every question you've missed has since been answered right.</p><a class="btn primary" href="#/">Back to hub</a></section>`;
+      if (!pool.length) { run = null; return `<section class="panel result"><h2>No glitches to fix</h2><p class="muted">Every question you've missed has since been answered right.</p><a class="btn primary" href="#/">Back to hub</a></section>`; }
+    } else if ((arg || "").startsWith("lesson-")) {
+      const l = EJU.lessons.find(x => "lesson-" + x.id === arg); if (!l) return vHub();
+      lessonId = l.id; dId = l.s; title = l.n;
+      pool = shuffle(EJU.lessonPool(l));
+      const weight = (q) => { const r = S().q[q.id]; return !r ? 0 : !r.lastRight ? 1 : 2 + Math.random(); };
+      pool.sort((a, b) => weight(a) - weight(b));
     } else {
       const d = district(arg); if (!d) return vHub();
       dId = d.id; moodKey = d.id; title = d.name;
@@ -275,7 +301,7 @@
     }
     scene("mood", moodKey);
     const maxHP = S().ware.armor ? 4 : 3;
-    run = { title, district: dId, list: pool.slice(0, 8), i: 0, right: 0, hp: maxHP, maxHP, xp: 0, creds: 0, optic: !!S().ware.optic, answered: false, lost: false };
+    run = { title, district: dId, lesson: lessonId, list: pool.slice(0, 8), i: 0, right: 0, hp: maxHP, maxHP, xp: 0, creds: 0, optic: !!S().ware.optic, answered: false, lost: false };
     sfx("boot");
     return missionHTML();
   }
@@ -349,6 +375,7 @@
     return `<div class="talker ${cls}" data-mood="${mood}">${avatar("allanah", "sm", mood)}<div><b>Allanah</b><p><span class="sr">${esc(text)}</span><span class="say" aria-hidden="true">${esc(text)}</span></p></div></div>`;
   }
   function animateTalk(root = document) {
+    if (!root) return;
     const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
     root.querySelectorAll(".talker:not(.talked)").forEach(t => {
       t.classList.add("talked"); if (reduce) return;
@@ -414,6 +441,7 @@
     Game.finishMission(run.district, run.right, total, clean);
     flat ? sfx("fail") : sfx("levelup");
     const pct = run.right / (run.i + 1);
+    if (run.lesson) return endLesson(flat);
     view.innerHTML = `<section class="panel result">
       ${flat ? `<h2>Flatlined</h2><p class="muted">Integrity hit zero. Every point you earned still counts. Patch up and run it again.</p>` :
         `${pct >= 0.8 ? `<div class="stamp" lang="ja">合格</div>` : ""}<h2>${clean ? "Clean run" : "Run complete"}</h2>`}
@@ -423,6 +451,30 @@
       <div class="row" style="justify-content:center">
         ${run.district ? `<a class="btn primary" href="#/mission/${run.district}" id="again">${icon("play")}Run it again</a><a class="btn" href="#/district/${run.district}">District</a>` : `<a class="btn primary" href="#/mission/mistakes" id="again">Keep fixing</a>`}
         <a class="btn ghost" href="#/">Hub</a></div>
+    </section>`;
+    animateTalk(view);
+    $("#again") && $("#again").addEventListener("click", (e) => { e.preventDefault(); route(true); });
+    flushEvents();
+  }
+
+  function endLesson(flat) {
+    const l = EJU.lessons.find(x => x.id === run.lesson), total = run.list.length;
+    const pct = Math.round(run.right / total * 100), pass = !flat && pct >= 70;
+    const s = S(); s.lessons = s.lessons || {}; const L = s.lessons[l.id] = s.lessons[l.id] || {};
+    L.best = Math.max(L.best || 0, pct); if (pass && !L.passed) { L.passed = Game.today(); Game.progressGig("lesson", 1); }
+    if (pass) { s.checks = s.checks || {}; s.checks["lesson:" + l.id] = s.checks["lesson:" + l.id] || Game.today(); }
+    const ls = EJU.lessons.filter(x => x.s === l.s);
+    if (ls.every(x => s.lessons[x.id] && s.lessons[x.id].passed)) Game.award("lessons");
+    Game.save();
+    const nxt = ls[ls.indexOf(l) + 1];
+    view.innerHTML = `<section class="panel result">
+      ${pass ? `<div class="stamp" lang="ja">合格</div><h2>Lesson passed</h2>` : `<h2>${flat ? "Flatlined" : "Not passed yet"}</h2><p class="muted">You need 70% to pass. Reread the lesson, then try the quiz again. Missed questions wait in your Glitch log.</p>`}
+      <div class="big data">${run.right}/${total}</div>
+      <div style="max-width:460px;width:100%;text-align:left">${talkHTML(line(pass ? "lessonPass" : "lessonFail"), "comm")}</div>
+      <div class="row" style="justify-content:center"><span class="chip on">${icon("bolt")}+${run.xp} XP</span><span class="chip on">${icon("cred")}+${Math.round(run.creds * Game.mult())} creds</span></div>
+      <div class="row" style="justify-content:center">
+        ${pass ? (nxt ? `<a class="btn primary" href="#/lesson/${nxt.id}">${icon("play")}Next lesson: ${esc(nxt.n)}</a>` : `<a class="btn primary" href="#/subject/${l.s}">${icon("check")}Subject complete</a>`) : `<a class="btn primary" href="#/lesson/${l.id}">${icon("intel")}Reread the lesson</a><a class="btn" href="#/mission/lesson-${l.id}" id="again">Retry the quiz</a>`}
+        <a class="btn ghost" href="#/subject/${l.s}">All ${esc(subj(l.s).short)} lessons</a></div>
     </section>`;
     animateTalk(view);
     $("#again") && $("#again").addEventListener("click", (e) => { e.preventDefault(); route(true); });
@@ -535,41 +587,6 @@
     flushEvents();
   }
 
-  /* ---------- Intercepts (listening) ---------- */
-  function vIntercept(id) {
-    scene("mood", "jp");
-    const can = "speechSynthesis" in window;
-    if (!id) return `<header class="hero"><h1>Intercepts</h1><p>Sable caught these transmissions. Each one is read aloud in Japanese like the EJU listening section. Listen, then answer the question at the end.</p>
-      ${can ? "" : `<p class="panel flat">Your browser can't read Japanese aloud, so each intercept shows its transcript instead.</p>`}</header>
-      <div class="grid-auto">${EJU.listening.map((l, i) => `<a class="panel district" style="min-height:0" href="#/intercept/${l.id}"><span class="muted small data">Signal ${String(i + 1).padStart(2, "0")}</span><h3>${esc(l.title)}</h3><p class="small ${S().listen[l.id] ? "" : "muted"}">${S().listen[l.id] ? "Decoded" : "Not decoded yet"}</p></a>`).join("")}</div>`;
-    const l = EJU.listening.find(x => x.id === id); if (!l) return vIntercept();
-    return `<div class="mission"><a href="#/intercept" class="small">${icon("back")}Intercepts</a>
-      <section class="panel stack" style="margin-top:var(--space-md)"><h2>${esc(l.title)}</h2>
-        <div class="row"><button class="btn primary" id="play">${icon("play")}Play transmission</button><button class="btn ghost" id="tx">Show transcript</button></div>
-        <div id="transcript" hidden lang="ja" class="jp">${l.lines.map(([w, t]) => `<p>${w === "n" ? "" : w === "f" ? "女：" : "男："}${esc(t)}</p>`).join("")}</div>
-        <p class="question jpq" lang="ja">${esc(l.lines[l.lines.length - 1][1])}</p>
-        <div class="choices">${l.c.map((c, k) => `<button class="choice" data-ci="${k}" lang="ja"><span class="k">${k + 1}</span><span>${esc(c)}</span></button>`).join("")}</div>
-        <div id="after"></div></section></div>`;
-  }
-  function bindIntercept(id) {
-    const l = EJU.listening.find(x => x.id === id); if (!l) return;
-    const can = "speechSynthesis" in window;
-    $("#play").addEventListener("click", () => { sfx("glitch"); if (can) speak(l.lines); else $("#transcript").hidden = false; });
-    $("#tx").addEventListener("click", () => { $("#transcript").hidden = !$("#transcript").hidden; });
-    let done = false;
-    $$(".choice").forEach(b => b.addEventListener("click", (e) => {
-      if (done) return; done = true; const ci = +b.dataset.ci, ok = ci === l.a;
-      $$(".choice").forEach(x => { x.disabled = true; if (+x.dataset.ci === l.a) x.classList.add("right"); });
-      if (!ok) b.classList.add("wrong");
-      sfx(ok ? "correct" : "wrong"); scene(ok ? "pulse" : "hit");
-      if (ok) Game.addXP(15, 12);
-      Game.finishListen(l.id, ok);
-      $("#transcript").hidden = false;
-      $("#after").innerHTML = `<div class="explain"><b>${ok ? "Signal decoded." : "Signal lost."}</b> ${esc(l.e)}</div><div class="row" style="margin-top:var(--space-md)"><a class="btn primary" href="#/intercept">Next intercept</a></div>`;
-      flushEvents();
-    }));
-  }
-
   /* ---------- Crew ---------- */
   function vCrew() {
     scene("mood", "hub");
@@ -629,24 +646,22 @@
           <dt>Exam voucher mailed</dt><dd>${fmtDate(x.voucher)} (in Japan, tentative)</dd>
           <dt>Results online</dt><dd>${esc(x.results)} (based on past years)</dd></dl></div>`).join("")}
       </section>
-      <section class="panel stack"><h2>The four subjects</h2><div class="table-wrap"><table><thead><tr><th>Subject</th><th>Time</th><th>Score</th><th>Language</th><th>What's in it</th></tr></thead>
+      <section class="panel stack"><h2>His two subjects</h2><div class="table-wrap"><table><thead><tr><th>Subject</th><th>Time</th><th>Score</th><th>Language</th><th>What's in it</th></tr></thead>
         <tbody>${EJU.format.map(f => `<tr><td><b>${esc(f.subj)}</b></td><td class="data">${esc(f.time)}</td><td class="data">${esc(f.score)}</td><td>${esc(f.lang)}</td><td>${esc(f.parts)}</td></tr>`).join("")}</tbody></table></div>
-        <p class="muted small">On the day: Japanese first, then Science or Japan and the World, then Mathematics.</p></section>
+        <p class="muted small">On the day the Japanese test runs first. He doesn't sit it: he arrives for Science, then Mathematics.</p></section>
       <section class="grid-2">
         <div class="panel stack"><h2>Good to know</h2><ul class="list">${EJU.facts.map(f => `<li>${esc(f)}</li>`).join("")}</ul></div>
         <div class="panel stack"><h2>Game plan to the Gate</h2><ul class="list">${EJU.plan.map(p => `<li><b>${esc(p.when)}</b><span class="muted small">${esc(p.what)}</span></li>`).join("")}</ul></div>
       </section>
-      <section class="panel stack"><h2>The Japanese test, part by part</h2><div class="table-wrap"><table><thead><tr><th>Part</th><th>Time</th><th>Score</th><th>What happens</th></tr></thead>
-        <tbody>${EJU.japaneseParts.map(p => `<tr><td><b>${esc(p.part)}</b></td><td class="data">${esc(p.time)}</td><td class="data">${esc(p.score)}</td><td>${esc(p.detail)}</td></tr>`).join("")}</tbody></table></div>
-        <div class="row"><a class="btn small primary" href="#/writing">${icon("chip")}Practise writing</a><a class="btn small" href="#/intercept">${icon("wave")}Practise listening</a></div></section>
       <section class="grid-2">
         <div class="panel stack"><h2>How scoring works</h2>
-          <p>Every part except writing is <b>scaled</b> with item response theory, so a score from a harder session is worth the same as one from an easier session. There's no pass mark: each university sets its own.</p>
-          <p>The essay is marked by trained raters in levels:</p>
-          <div class="table-wrap"><table><thead><tr><th>Score</th><th>Level</th><th>What it means</th></tr></thead><tbody>${EJU.writingRubric.map(r => `<tr><td class="data">${r[0]}</td><td><b>${r[1]}</b></td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table></div></div>
+          <p>Math and Science scores are <b>scaled</b> with item response theory, so a score from a harder session is worth the same as one from an easier session. There's no pass mark: each university sets its own.</p>
+          <p>Aizu and Kyushu both compare him with the average score of that session, so the table on the right is his real bar.</p>
+          <p>Physics and Chemistry are scored out of 100 each and added together for the 200-point Science score.</p>
+          <div class="row"><a class="btn small primary" href="#/unis">${icon("map")}See the universities</a></div></div>
         <div class="panel stack"><h2>Where the middle is</h2><p class="muted small">Average and highest scores, ${esc(EJU.averages.label)}.</p>
           <div class="table-wrap"><table><thead><tr><th>Subject</th><th>Average</th><th>Top</th></tr></thead><tbody>${EJU.averages.rows.map(r => `<tr><td>${esc(r[0])}</td><td class="data">${esc(r[1])}</td><td class="data">${esc(r[2])}</td></tr>`).join("")}</tbody></table></div>
-          <p class="muted small">Physics, chemistry and biology are each out of 100; two of them make the 200-point Science score. <a href="${esc(EJU.averages.source)}" target="_blank" rel="noopener">Source: JASSO</a></p></div>
+          <p class="muted small">Science subjects are each out of 100. <a href="${esc(EJU.averages.source)}" target="_blank" rel="noopener">Source: JASSO</a></p></div>
       </section>
       <section class="stack"><h2>What each subject covers (2026 syllabus)</h2><div class="grid-auto">${EJU.syllabus.map(x => `<div class="panel flat stack"><h3>${esc(x.subj)}</h3><ul class="list small">${x.items.map(i => `<li>${esc(i)}</li>`).join("")}</ul><a href="${esc(x.url)}" target="_blank" rel="noopener" class="small">Full syllabus ${icon("ext", "")}</a></div>`).join("")}</div></section>
       <section class="stack"><h2>Strategy</h2><div class="grid-auto">${EJU.strategy.map(x => `<div class="panel flat stack"><h3>${esc(x.h)}</h3><p class="small">${esc(x.p)}</p></div>`).join("")}</div></section>
@@ -670,52 +685,102 @@
       </div>`;
   }
 
-  /* ---------- Writing practice (記述) ---------- */
-  let writeTimer = null;
-  function vWriting(id) {
-    scene("mood", "jp");
-    const done = S().writing || {};
-    if (!id) return `<header class="hero"><h1>Writing</h1><p>The EJU essay: pick one of two themes, write 400 to 500 characters in 30 minutes, worth up to 50 points. Each set below is an original practice prompt in the same style.</p></header>
-      <div class="grid-auto">${EJU.writing.map((w, i) => `<a class="panel district" style="min-height:0" href="#/writing/${w.id}"><span class="muted small data">Set ${String(i + 1).padStart(2, "0")}</span><h3>${esc(w.a)}</h3><p class="small jp" lang="ja">${esc(w.pair[0].slice(0, 46))}…</p><span class="small ${done[w.id] ? "" : "muted"}">${done[w.id] ? "Written: " + done[w.id] + " characters" : "Not written yet"}</span></a>`).join("")}</div>
-      <section class="panel stack" style="margin-top:var(--space-xl)"><h2>How it's scored</h2><div class="table-wrap"><table><thead><tr><th>Score</th><th>Level</th><th>What it means</th></tr></thead><tbody>${EJU.writingRubric.map(r => `<tr><td class="data">${r[0]}</td><td><b>${r[1]}</b></td><td>${esc(r[2])}</td></tr>`).join("")}</tbody></table></div></section>`;
-    const w = EJU.writing.find(x => x.id === id); if (!w) return vWriting();
-    return `<div class="mission"><div class="mission-top"><a href="#/writing" class="iconbtn" aria-label="Back to prompts">${icon("back")}</a>
-      <div><div class="row between small"><span>Writing, ${esc(w.a)}</span><span class="data" id="wClock">30:00</span></div><div class="bar thin pink"><i id="wBar" style="--p:0"></i></div></div><span></span></div>
-      <section class="panel stack"><p class="muted small">Choose one theme:</p>
-        <div class="seg" id="wPick">${w.pair.map((p, i) => `<button type="button" data-p="${i}" aria-pressed="${i === 0}">Theme ${i + 1}</button>`).join("")}</div>
-        <p class="question jpq" lang="ja" id="wPrompt">${esc(w.pair[0])}</p>
-        <textarea id="wText" lang="ja" rows="12" placeholder="ここに書いてください（400〜500字）" aria-label="Your essay"></textarea>
-        <div class="row between"><span class="data" id="wCount">0 / 500</span><div class="row"><button class="btn small" id="wStart">${icon("play")}Start 30-minute timer</button><button class="btn small primary" id="wDone">${icon("check")}Finish</button></div></div>
-        <details class="steps" open><summary>${icon("intel")}Checklist before you finish</summary><ul class="checks">${EJU.writingChecklist.map((c, i) => `<li><label><input type="checkbox" data-ck="${i}"> ${esc(c)}</label></li>`).join("")}</ul></details>
-        <details class="steps"><summary>${icon("intel")}How to structure it</summary><ol>${EJU.methods.Writing.map(x => `<li>${esc(x)}</li>`).join("")}</ol>
-          <p class="small jp" lang="ja">例：私は〜に賛成である。理由は二つある。第一に、〜。第二に、〜。確かに〜という意見もある。しかし、〜。以上の理由から、私は〜と考える。</p></details>
-      </section></div>`;
+  /* ---------- Checklist ---------- */
+  function vChecklist() {
+    const s = S(); const all = checklistItems(), done = all.filter(checkDone).length;
+    const row = (id, html, extra = "") => `<li class="ck ${checkDone(id) ? "done" : ""}"><label><input type="checkbox" data-check="${esc(id)}" ${checkDone(id) ? "checked" : ""}><span>${html}</span></label>${extra}</li>`;
+    const group = (gid, h, rows, note = "") => { const ids = rows.map(r => r[0]); const n = ids.filter(checkDone).length;
+      return `<section class="panel stack" id="ck-${gid}"><div class="row between"><h2>${esc(h)}</h2><span class="data small">${n}/${ids.length}</span></div>${note}<ul class="checklist">${rows.map(r => r[1]).join("")}</ul></section>`; };
+    const lessonGroups = EJU.subjects.map(x => group("ls-" + x.id, x.name + " lessons", EJU.lessons.filter(l => l.s === x.id).map(l => ["lesson:" + l.id, row("lesson:" + l.id, `<a href="#/lesson/${l.id}">${esc(l.n)}</a>`)]),
+      `<p class="muted small">These tick themselves when he passes the lesson quiz. He can tick them by hand too.</p>`));
+    const custom = (s.customChecks || []).map(c => [c.id, row(c.id, esc(c.text), `<button class="iconbtn small-x" type="button" data-delcheck="${esc(c.id)}" aria-label="Delete ${esc(c.text)}">${icon("x")}</button>`)]);
+    return `<header class="hero"><h1>Checklist</h1><p>Everything between now and a university in Japan, in order. Tick things off as he goes; it saves on this device.</p>
+      <div class="ctl" style="max-width:520px"><span><span>Done</span><span class="data">${done}/${all.length}</span></span><div class="bar"><i style="--p:${(done / all.length).toFixed(3)}"></i></div></div></header>
+      <nav class="tabs res-tabs" aria-label="Jump to section">${EJU.checklist.map(g => `<a href="#ck-${g.id}" data-jump="ck-${g.id}">${esc(g.h.split(":")[0])}</a>`).join("")}<a href="#ck-ls-m2" data-jump="ck-ls-m2">Lessons</a><a href="#ck-mine" data-jump="ck-mine">My own</a></nav>
+      <div class="stack-lg" style="margin-top:var(--space-lg)">
+        ${EJU.checklist.map(g => group(g.id, g.h, g.items.map(([id, t]) => [id, row(id, esc(t))]))).join("")}
+        <div class="grid-auto">${lessonGroups.join("")}</div>
+        <section class="panel stack" id="ck-mine"><div class="row between"><h2>My own</h2><span class="data small">${custom.filter(c => checkDone(c[0])).length}/${custom.length}</span></div>
+          ${custom.length ? `<ul class="checklist">${custom.map(c => c[1]).join("")}</ul>` : `<p class="muted small">Nothing here yet. Add anything: a school's open day, a TOEFL date, a past paper.</p>`}
+          <form class="row" id="addCheck" autocomplete="off"><label class="grow"><span class="sr">New checklist item</span><input type="text" id="newCheck" maxlength="140" placeholder="Add something to do" required></label><button class="btn primary small" type="submit">${icon("check")}Add</button></form></section>
+      </div>`;
   }
-  function bindWriting(id) {
-    const w = EJU.writing.find(x => x.id === id); if (!w) return;
-    const ta = $("#wText"), cnt = $("#wCount"), key = "neonpass.draft." + id;
-    try { ta.value = localStorage.getItem(key) || ""; } catch (e) {}
-    const upd = () => { const n = ta.value.replace(/\s/g, "").length; cnt.textContent = n + " / 500"; cnt.style.color = n > 500 ? "var(--color-danger)" : n >= 400 ? "var(--color-mint)" : ""; try { localStorage.setItem(key, ta.value); } catch (e) {} return n; };
-    ta.addEventListener("input", upd); upd();
-    $$("#wPick button").forEach(b => b.addEventListener("click", () => { $$("#wPick button").forEach(x => x.setAttribute("aria-pressed", String(x === b))); $("#wPrompt").textContent = w.pair[+b.dataset.p]; sfx("tap"); }));
-    $("#wStart").addEventListener("click", () => {
-      clearInterval(writeTimer); let left = 1800; sfx("alarm"); ta.focus();
-      writeTimer = setInterval(() => {
-        left--; const c = $("#wClock"); if (!c) return clearInterval(writeTimer);
-        c.textContent = clock(left); $("#wBar").style.setProperty("--p", (1 - left / 1800).toFixed(3));
-        if (left === 180) ping("writeLate");
-        if (left <= 0) { clearInterval(writeTimer); sfx("fail"); c.textContent = "Time"; }
-      }, 1000);
+  function bindChecklist() {
+    $$("[data-check]").forEach(b => b.addEventListener("change", () => {
+      const s = S(); s.checks = s.checks || {}; const id = b.dataset.check;
+      if (b.checked) { s.checks[id] = Game.today(); Game.addXP(5, 3); sfx("correct"); } else { delete s.checks[id]; sfx("tap"); }
+      Game.save(); b.closest("li").classList.toggle("done", b.checked);
+      const sec = b.closest("section"); const boxes = $$("[data-check]", sec);
+      const n = boxes.filter(x => x.checked).length; const c = sec.querySelector(".row.between .data"); if (c) c.textContent = n + "/" + boxes.length;
+      if (b.checked) ping(n === boxes.length && boxes.length > 1 ? "checkAll" : "checkTick");
+      const all = checklistItems(), done = all.filter(checkDone).length; const top = $(".hero .ctl");
+      if (top) { top.querySelector(".data").textContent = done + "/" + all.length; top.querySelector("i").style.setProperty("--p", (done / all.length).toFixed(3)); }
+      renderHUD(); flushEvents();
+    }));
+    $$("[data-delcheck]").forEach(b => b.addEventListener("click", () => {
+      const s = S(); s.customChecks = (s.customChecks || []).filter(c => c.id !== b.dataset.delcheck); if (s.checks) delete s.checks[b.dataset.delcheck]; Game.save(); sfx("tap"); route(true);
+    }));
+    const f = $("#addCheck"); f && f.addEventListener("submit", (e) => {
+      e.preventDefault(); const t = $("#newCheck").value.trim(); if (!t) return;
+      const s = S(); s.customChecks = s.customChecks || []; s.customChecks.push({ id: "mine:" + Date.now().toString(36), text: t }); Game.save(); sfx("coin"); route(true);
+      setTimeout(() => { const i = $("#newCheck"); i && i.focus({ preventScroll: true }); }, 0);
     });
-    $("#wDone").addEventListener("click", () => {
-      clearInterval(writeTimer); const n = upd();
-      if (n < 40) { ping("writeEmpty"); return; }
-      const s = S(); s.writing = s.writing || {}; const first = !s.writing[id]; s.writing[id] = n; Game.save();
-      const ok = n >= 400 && n <= 500, checks = $$("[data-ck]:checked").length;
-      const xp = (ok ? 40 : 20) + checks * 2; Game.addXP(xp, first ? 30 : 10);
-      sfx("levelup"); toast("Essay saved", `${n} characters, +${xp} XP`, "check");
-      ping(ok ? "writeGood" : n < 400 ? "writeShort" : "writeLong"); flushEvents();
+  }
+
+  /* ---------- Universities ---------- */
+  const safeUrl = (u) => /^https?:\/\//i.test(u || "") ? u : "";
+  function uniCard(u, mine) {
+    const rows = [["Program", u.program], ["Where", u.city], ["Campus", u.campus], ["EJU he needs", u.eju], ["English", u.english], ["How they select", u.select], ["When to apply", u.apply], ["Starts", u.start], ["Cost", u.fees], ["Living costs", u.living]].filter(r => r[1]);
+    const link = safeUrl(u.url), guide = safeUrl(u.guide);
+    return `<article class="panel stack uni ${u.target ? "hot-edge" : ""}" id="uni-${esc(u.id)}">
+      <div class="row between" style="align-items:flex-start"><div class="stack" style="gap:4px"><span class="kicker">${u.target ? "His target" : mine ? "Added by you" : esc(u.type || "")}</span><h2>${esc(u.name)}${u.jp ? ` <span class="jp muted small" lang="ja">${esc(u.jp)}</span>` : ""}</h2></div>
+        ${mine ? `<button class="btn small ghost" type="button" data-deluni="${esc(u.id)}">${icon("x")}Remove</button>` : ""}</div>
+      <dl class="kv">${rows.map(r => `<dt>${esc(r[0])}</dt><dd>${esc(r[1])}</dd>`).join("")}</dl>
+      ${u.why && u.why.length ? `<h3>Why it's worth a look</h3><ul class="list">${u.why.map(w => `<li>${esc(w)}</li>`).join("")}</ul>` : ""}
+      ${u.fit ? `<div class="explain"><b>For Dhruv:</b> ${esc(u.fit)}</div>` : ""}
+      ${u.note ? `<p class="muted small">${esc(u.note)}</p>` : ""}
+      ${u.notes ? `<p>${esc(u.notes)}</p>` : ""}
+      ${link || guide ? `<div class="row">${link ? `<a class="btn small" href="${esc(link)}" target="_blank" rel="noopener">${icon("ext")}Program page</a>` : ""}${guide ? `<a class="btn small ghost" href="${esc(guide)}" target="_blank" rel="noopener">${icon("intel")}Application guide</a>` : ""}</div>` : ""}
+    </article>`;
+  }
+  function vUnis() {
+    const mine = S().unis || [];
+    const list = EJU.universities;
+    return `<header class="hero"><h1>Universities</h1><p>Real universities with their own campus, where he can earn a full degree taught in English using EJU Mathematics Course 2 plus physics and/or chemistry, with no Japanese test. Aizu and Kyushu first, then the closest matches.</p></header>
+      <section class="panel stack"><h2>At a glance</h2><div class="table-wrap"><table><thead><tr><th>University</th><th>Program</th><th>EJU</th><th>Apply</th><th>Starts</th></tr></thead>
+        <tbody>${list.concat(mine).map(u => `<tr><td><a href="#uni-${esc(u.id)}" data-jump="uni-${esc(u.id)}"><b>${esc(u.name)}</b></a></td><td>${esc(u.program || "")}</td><td>${esc((u.eju || "").split(". ")[0])}</td><td>${esc((u.apply || "").split(". ")[0])}</td><td>${esc(u.start || "")}</td></tr>`).join("")}</tbody></table></div>
+        <p class="muted small">Dates are from each university's 2027 application guide. They move a little every year, so check the newest guide before applying. With a June 2027 EJU score, he'd normally apply in the round that opens later in 2027 or early 2028, for entry in October 2028 (April for Science Tokyo).</p></section>
+      <div class="stack-lg" style="margin-top:var(--space-lg)">${list.map(u => uniCard(u)).join("")}</div>
+      <section class="stack" style="margin-top:var(--space-xl)"><h2>Universities you've added</h2>
+        ${mine.length ? `<div class="stack-lg">${mine.map(u => uniCard(u, true)).join("")}</div>` : `<p class="muted">None yet. Add any university he's considering and it shows up here, in the table above, and on the checklist.</p>`}
+        <form class="panel stack" id="addUni" autocomplete="off"><h3>Add a university</h3>
+          <div class="form-grid">
+            <label>University name<input type="text" name="name" maxlength="80" required></label>
+            <label>Program<input type="text" name="program" maxlength="120" placeholder="e.g. Computer Science (English)"></label>
+            <label>City and campus<input type="text" name="campus" maxlength="140" placeholder="e.g. Tokyo, one main campus"></label>
+            <label>EJU subjects needed<input type="text" name="eju" maxlength="140" placeholder="e.g. Math Course 2 + Physics"></label>
+            <label>Application deadline<input type="text" name="apply" maxlength="80" placeholder="e.g. 15 January 2028"></label>
+            <label>Starts<input type="text" name="start" maxlength="20" placeholder="April or October"></label>
+            <label class="wide">Link<input type="url" name="url" maxlength="300" placeholder="https://"></label>
+            <label class="wide">Notes<textarea name="notes" rows="3" maxlength="600" placeholder="Why it's on the list, fees, anything else"></textarea></label>
+          </div>
+          <div class="row"><button class="btn primary" type="submit">${icon("check")}Save university</button><span class="muted small">Saved on this device. It also adds an "apply" item to the checklist.</span></div></form></section>`;
+  }
+  function bindUnis() {
+    const f = $("#addUni"); f && f.addEventListener("submit", (e) => {
+      e.preventDefault(); const d = Object.fromEntries(new FormData(f).entries()); Object.keys(d).forEach(k => d[k] = String(d[k]).trim());
+      if (!d.name) return;
+      const id = "mine-" + Date.now().toString(36);
+      const u = { id, name: d.name, program: d.program, campus: d.campus, eju: d.eju, apply: d.apply, start: d.start, url: safeUrl(d.url), notes: d.notes };
+      const s = S(); s.unis = s.unis || []; s.unis.push(u);
+      s.customChecks = s.customChecks || []; s.customChecks.push({ id: "mine:uni-" + id, text: "Apply to " + d.name + (d.apply ? " (deadline " + d.apply + ")" : "") });
+      Game.save(); sfx("coin"); ping("uniAdd", 200); route(true);
+      setTimeout(() => { const el = document.getElementById("uni-" + id); el && el.scrollIntoView({ block: "start" }); }, 30);
     });
+    $$("[data-deluni]").forEach(b => b.addEventListener("click", () => {
+      const s = S(), id = b.dataset.deluni; s.unis = (s.unis || []).filter(u => u.id !== id);
+      s.customChecks = (s.customChecks || []).filter(c => c.id !== "mine:uni-" + id); Game.save(); sfx("tap"); route(true);
+    }));
   }
 
   /* ---------- Runner profile and settings ---------- */
@@ -741,8 +806,7 @@
       <section class="stack"><h2>Achievements</h2><div class="grid-auto">${EJU.badges.map(b => `<div class="badge ${s.badges[b.id] ? "got" : ""}"><span class="hex">${icon(s.badges[b.id] ? "check" : "lock")}</span><div><b>${esc(b.name)}</b><span>${esc(b.desc)}</span></div></div>`).join("")}</div></section>
       <section class="panel stack"><h2>Settings</h2>
         <label>Callsign<input type="text" id="cs" maxlength="20" value="${esc(s.callsign)}"></label>
-        <div class="stack"><span class="small" style="font-weight:600">Track</span><div class="seg" data-set="track">${EJU.tracks.map(t => `<button type="button" data-v="${t.id}" aria-pressed="${s.track === t.id}">${esc(t.name)}</button>`).join("")}</div>
-          <p class="muted small">${esc(EJU.tracks.find(t => t.id === s.track).note)}</p></div>
+        <div class="stack"><span class="small" style="font-weight:600">Track</span><p class="muted small">${esc(EJU.tracks[0].note)}</p></div>
         <div class="stack"><span class="small" style="font-weight:600">Target exam</span><div class="seg" data-set="session">${EJU.sessions.map(t => `<button type="button" data-v="${t.id}" aria-pressed="${s.session === t.id}">${esc(t.label)}</button>`).join("")}</div></div>
         <div class="stack"><span class="small" style="font-weight:600">Daily goal</span><div class="seg" data-set="dailyGoal">${[30, 60, 100, 150].map(n => `<button type="button" data-v="${n}" aria-pressed="${s.dailyGoal === n}">${n} XP</button>`).join("")}</div></div>
         <div class="stack"><span class="small" style="font-weight:600">Effects</span><div class="seg"><button type="button" id="fx" aria-pressed="${s.settings.effects}">Scanlines</button></div></div>
@@ -772,11 +836,11 @@
     overlay(`<div class="stack"><div class="msg">${avatar("rook")}<div><div class="who">Rook <span>Handler</span></div><h2 style="margin-top:6px">New runner on the board</h2></div></div>
       <p>I run a crew that gets people through the Gate: the EJU, the exam for Japanese universities. Tell me who you are and what you're aiming for.</p>
       <label>Callsign<input type="text" id="ob-cs" maxlength="20" placeholder="Pick a name" value=""></label>
-      <div class="stack"><span class="small" style="font-weight:600">Which track?</span><div class="seg" id="ob-track">${EJU.tracks.map(t => `<button type="button" data-v="${t.id}" aria-pressed="${s.track === t.id}">${esc(t.name)}</button>`).join("")}</div></div>
+      <p class="muted small">Your track: Mathematics Course 2, Physics and Chemistry. Every lesson teaches first and quizzes after.</p>
       <div class="stack"><span class="small" style="font-weight:600">Target exam</span><div class="seg" id="ob-ses">${EJU.sessions.map(t => `<button type="button" data-v="${t.id}" aria-pressed="${s.session === t.id}">${esc(t.label)}</button>`).join("")}</div></div>
       <button class="btn primary" id="ob-go">${icon("bolt")}Jack in</button></div>`, (ov, close) => {
       const seg = (id, key) => $$("#" + id + " button", ov).forEach(b => b.addEventListener("click", () => { $$("#" + id + " button", ov).forEach(x => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); s[key] = b.dataset.v; sfx("tap"); }));
-      seg("ob-track", "track"); seg("ob-ses", "session");
+      seg("ob-ses", "session"); s.track = "sci";
       ov.querySelector("#ob-go").addEventListener("click", () => {
         s.callsign = ov.querySelector("#ob-cs").value.trim() || s.callsign; s.onboarded = true; s.gigs = null; Game.save();
         SFX.unlock(); sfx("boot"); close(); route();
@@ -788,24 +852,26 @@
   /* ---------- Router ---------- */
   function route(force) {
     if (speechSynthesis && speechSynthesis.speaking) speechSynthesis.cancel();
-    clearInterval(bossTimer); clearInterval(writeTimer);
+    clearInterval(bossTimer);
     const pc = $("#allanahPing"); pc && pc.classList.remove("show");
     const parts = location.hash.replace(/^#\/?/, "").split("/");
     const [a, b] = parts;
     let html;
     switch (a) {
       case "": case undefined: html = vHub(); break;
-      case "map": html = vMap(); break;
-      case "district": html = vDistrict(b); break;
+      case "map": html = vSubject("m2"); break;
+      case "district": case "subject": html = vSubject(b); break;
+      case "lesson": html = vLesson(b); break;
+      case "more": html = `<header class="hero"><h1>All pages</h1></header><nav class="grid-auto more-nav" aria-label="All pages">${NAV.map(([h, i, l]) => `<a class="panel flat district" style="min-height:0" href="${h}"><h3>${icon(i, "")} ${esc(l)}</h3></a>`).join("")}</nav>`; break;
+      case "checklist": html = vChecklist(); break;
+      case "unis": html = vUnis(); break;
       case "mission": html = vMission(b); break;
       case "boss": html = vBoss(); break;
       case "shards": html = b ? vDeck(b) : vShards(); break;
-      case "intercept": html = vIntercept(b); break;
       case "crew": html = vCrew(); break;
       case "shop": html = vShop(); break;
       case "intel": html = vIntel(); break;
       case "resources": html = vResources(); break;
-      case "writing": html = vWriting(b); break;
       case "me": html = vMe(); break;
       default: html = vHub();
     }
@@ -813,10 +879,11 @@
     $$("#view h1").forEach(h => { h.dataset.text = h.firstChild ? h.firstChild.textContent : h.textContent; });
     if (a === "mission" && run) bindMission();
     if (a === "shards" && b) bindDeck();
-    if (a === "intercept" && b) bindIntercept(b);
+    if (a === "checklist") bindChecklist();
+    if (a === "unis") bindUnis();
+    if (a === "lesson") animateTalk(view);
     if (a === "shop") bindShop();
     if (a === "me") bindMe();
-    if (a === "writing" && b) bindWriting(b);
     $$("[data-jump]").forEach(x => x.addEventListener("click", (e) => { e.preventDefault(); const t = document.getElementById(x.dataset.jump); t && t.scrollIntoView({ behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" }); }));
     if (a === "boss") { const sb = $("#startBoss"); sb && sb.addEventListener("click", startBoss); }
     $$("[data-story]").forEach(x => x.addEventListener("click", () => showStory(EJU.chapters.find(c => c.lvl === +x.dataset.story))));
@@ -853,6 +920,7 @@
   $("#musicBtn").addEventListener("click", () => { S().settings.music = !S().settings.music; Game.save(); SFX.setMusic(S().settings.music); syncSound(); });
 
   function boot() {
+    const st = S(); if (st.track !== "sci" || (st.gigs && st.gigs.list.some(g => g.kind === "listen"))) { st.track = "sci"; st.gigs = null; Game.save(); }
     applySkin(); applyFx(); syncSound(); route();
     if (!S().onboarded) setTimeout(onboarding, 400);
     else flushEvents();
